@@ -269,18 +269,85 @@ export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAd
     }, AD_POLL_INTERVAL_MS);
   }
 
+  // ---------- Media Session (OS-level now-playing controls) ----------
+  //
+  // This does NOT override YouTube's own background-playback restriction
+  // (confirmed, current policy: background/lock-screen continuation for
+  // YouTube video — including third-party iframe embeds — is gated to
+  // Premium accounts as an anti-abuse measure, enforced by YouTube's own
+  // player/backend, not by generic browser tab-throttling). Nothing
+  // client-side can bypass that. What this DOES do: give the browser/OS
+  // a real "now playing" session while in the foreground — lock-screen/
+  // notification media controls with the right title, artist, and
+  // artwork, and (on platforms where the two are handled separately)
+  // possibly avoid *additional* generic tab-throttling stacking on top
+  // of YouTube's own restriction. A real, worthwhile improvement; not a
+  // fix for the thing it sounds like it might fix.
+  function hasMediaSession() {
+    return typeof navigator !== 'undefined' && 'mediaSession' in navigator;
+  }
+
+  function updateMediaSessionMetadata(item) {
+    if (!hasMediaSession()) return;
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: item.title || 'Kids Music Tiles',
+        artist: item.artist || '',
+        artwork: item.artworkUrl ? [{ src: item.artworkUrl, sizes: '512x512', type: 'image/jpeg' }] : [],
+      });
+    } catch (e) {
+      // Cosmetic only (e.g. an unreachable artwork URL can throw in some
+      // browsers) — never worth failing playback over.
+    }
+  }
+
+  function updateMediaSessionPlaybackState() {
+    if (!hasMediaSession()) return;
+    try {
+      navigator.mediaSession.playbackState = pausedFlag ? 'paused' : 'playing';
+    } catch (e) {
+      // as above
+    }
+  }
+
+  function setupMediaSessionActionHandlers() {
+    if (!hasMediaSession()) return;
+    const handlers = {
+      play: () => resume().catch(() => {}),
+      pause: () => pause().catch(() => {}),
+      previoustrack: () => previous().catch(() => {}),
+      nexttrack: () => next().catch(() => {}),
+    };
+    for (const [action, handler] of Object.entries(handlers)) {
+      try {
+        // Not every action is supported on every browser (previoustrack/
+        // nexttrack less universally than play/pause) — setActionHandler
+        // throws for an unsupported action rather than ignoring it, so
+        // each is registered independently.
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (e) {
+        // unsupported action — fine, the rest still register
+      }
+    }
+  }
+
   // ---------- Queue / transport ----------
 
   function normalizeItem(entry) {
     if (typeof entry === 'string') {
       const videoId = extractVideoId(entry);
-      return { videoId, uri: entry, durationMs: null };
+      return { videoId, uri: entry, durationMs: null, title: null, artist: null, artworkUrl: null };
     }
     const videoId = extractVideoId(entry.uri || entry.videoId);
     return {
       videoId,
       uri: entry.uri || (videoId ? `youtube:video:${videoId}` : null),
       durationMs: entry.durationMs || null,
+      title: entry.title || null,
+      artist: entry.artist || null,
+      // store.js's tiles call this albumArtUrl; accept either name so a
+      // caller that already has a tile object doesn't need to reshape it.
+      artworkUrl: entry.artworkUrl || entry.albumArtUrl || null,
     };
   }
 
@@ -294,6 +361,7 @@ export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAd
     ytPlayer.loadVideoById(item.videoId);
     applyLiveVolume();
     scheduleAdWatch(item);
+    updateMediaSessionMetadata(item);
     emitEvent('track_changed', { index, uri: item.uri, isAutoAdvance });
     return Promise.resolve();
   }
@@ -324,6 +392,7 @@ export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAd
         break;
       case YT.PlayerState.ENDED:
         pausedFlag = true;
+        updateMediaSessionPlaybackState();
         emitEvent('player_state_changed', { code: e.data });
         emitState();
         handleEnded();
@@ -335,6 +404,7 @@ export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAd
       default:
         break;
     }
+    updateMediaSessionPlaybackState();
     emitEvent('player_state_changed', { code: e.data });
     emitState();
   }
@@ -493,6 +563,7 @@ export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAd
                 onReady: () => {
                   ready = true;
                   applyLiveVolume();
+                  setupMediaSessionActionHandlers();
                   emitEvent('ready');
                   emitEvent('connect_result', { connected: true });
                   resolve();

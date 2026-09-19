@@ -1,7 +1,8 @@
 // Wiring for youtube-player-demo.html. Deliberately independent of
-// store.js/app.js — this proves youtube-player.js works entirely on its
-// own, with no dependency on the rest of the (still Spotify-based) app.
+// store.js/app.js — this proves youtube-player.js (and youtube-api.js)
+// work entirely on their own, with no dependency on the rest of the app.
 import { createYouTubePlayer, extractVideoId } from './youtube-player.js';
+import { fetchVideoMetadata } from './youtube-api.js';
 
 const els = {
   input: document.getElementById('demo-video-input'),
@@ -83,16 +84,21 @@ player.onStateChange((state) => {
   els.adNotice.hidden = !state.isLikelyAd;
 });
 
+let currentQueueItems = [];
+
 player.onEvent(({ type, data }) => {
   const suffix = data && Object.keys(data).length ? ' ' + JSON.stringify(data) : '';
   log(`${type}${suffix}`);
-  if (type === 'track_changed') els.title.textContent = data.uri;
+  if (type === 'track_changed') {
+    const item = currentQueueItems[data.index];
+    els.title.textContent = (item && item.title) || data.uri;
+  }
   if (type === 'playback_error') showError(data.message || 'Playback error');
   if (type === 'ad_suspected') log('⚠ heuristic guess only — see youtube-player.js’s "Ad detection" comments');
   if (type === 'muted_autoplay_started') showError('Browser started this muted — tap ▶ once to ask for sound.');
 });
 
-function parseQueue() {
+async function parseQueue() {
   const lines = els.input.value
     .split('\n')
     .map((line) => line.trim())
@@ -101,7 +107,18 @@ function parseQueue() {
   for (const line of lines) {
     const videoId = extractVideoId(line);
     if (!videoId) throw new Error(`Not a recognizable YouTube URL or video ID: "${line}"`);
-    items.push({ uri: `youtube:video:${videoId}`, durationMs: null });
+    // Real title/artist/artwork, via oEmbed (see youtube-api.js) — feeds
+    // Media Session metadata (lock-screen/notification controls), same
+    // as the real app now does. Best-effort: a lookup failure still
+    // queues the video with a bare uri rather than blocking playback.
+    let meta = { title: null, artist: null, artworkUrl: null };
+    try {
+      const track = await fetchVideoMetadata(videoId);
+      meta = { title: track.title, artist: track.channelTitle, artworkUrl: track.thumbnailUrl };
+    } catch (e) {
+      log(`Metadata lookup failed for ${videoId} (queueing anyway): ${e.message}`);
+    }
+    items.push({ uri: `youtube:video:${videoId}`, durationMs: null, ...meta });
   }
   if (items.length === 0) throw new Error('Paste at least one YouTube URL or video ID.');
   return items;
@@ -109,10 +126,17 @@ function parseQueue() {
 
 async function loadFromInput() {
   hideError();
-  els.title.textContent = 'Loading…';
+  els.title.textContent = 'Looking up…';
   try {
-    const items = parseQueue();
-    await player.activateElement(); // must run before any other await — see youtube-player.js
+    // activateElement() first, before parseQueue()'s real network awaits
+    // (the oEmbed lookups) — it needs to run as close to this tap's own
+    // gesture as possible; the real app never has this ordering question
+    // since its tiles already carry looked-up metadata well before any
+    // tap (see kid-mode.js), this demo just cannot know a link's title
+    // until you tell it which link.
+    await player.activateElement();
+    const items = await parseQueue();
+    currentQueueItems = items;
     await player.playTracks(items, 0);
   } catch (e) {
     els.title.textContent = 'Nothing loaded yet';

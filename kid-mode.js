@@ -339,17 +339,19 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
       await player.activateElement();
       const mode = config.settings.endOfSong;
       if (mode === 'stop') {
-        await player.playTracks([tile.uri], 0);
+        await player.playTracks([tile], 0);
         player.setRepeatMode('off').catch(() => {});
       } else if (mode === 'repeat') {
-        await player.playTracks([tile.uri], 0);
+        await player.playTracks([tile], 0);
         player.setRepeatMode('track').catch(() => {});
       } else {
         pendingFullQueuePlay = { tile, at: Date.now() };
-        await player.playTracks(
-          config.tiles.map((t) => t.uri),
-          index
-        );
+        // Whole tile objects, not just uris: this is what feeds
+        // youtube-player.js's Media Session metadata (lock-screen/
+        // notification title+artist+artwork) and its ad-duration
+        // heuristic (expected vs. live duration) — both need more than
+        // an opaque id to work with.
+        await player.playTracks(config.tiles, index);
         player.setRepeatMode('context').catch(() => {});
       }
       await player.setVolume(config.settings.maxVolume);
@@ -360,7 +362,7 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
         // than accepted and failing later) — fall back right away.
         pendingFullQueuePlay = null;
         try {
-          await player.playTracks([tile.uri], 0);
+          await player.playTracks([tile], 0);
           await player.setVolume(config.settings.maxVolume);
           markTilePlaying(index);
           return;
@@ -627,7 +629,7 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
       const config = getConfig();
       const index = config.tiles.findIndex((t) => t.id === tile.id);
       player
-        .playTracks([tile.uri], 0)
+        .playTracks([tile], 0)
         .then(() => player.setVolume(config.settings.maxVolume))
         .then(() => markTilePlaying(index))
         .catch((e) => showError(e));
