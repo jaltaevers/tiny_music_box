@@ -29,9 +29,10 @@
         <h1>Kids Music Tiles</h1>
         <p>
           This page was opened directly from a file (the address bar
-          starts with <code>file://</code>), so it can't run — Spotify
-          login, and the rest of the app, need to be loaded from a real
-          web address.
+          starts with <code>file://</code>), so it can't run — browsers
+          block the app's own script from loading at all under
+          <code>file://</code>, regardless of what it does. It needs to be
+          loaded from a real web address instead.
         </p>
         <p class="muted">
           Open the deployed site instead, or serve this folder with a
@@ -43,32 +44,6 @@
     </div>
 
     <main id="app">
-      <!-- Logged out -->
-      <section id="login-view" class="view" hidden>
-        <div class="login-card">
-          <h1>Kids Music Tiles</h1>
-          <button id="login-btn" class="big-btn">Log in with Spotify</button>
-          <div id="login-error" class="warning" hidden></div>
-          <div id="redirect-uri-warning" class="warning" hidden></div>
-          <details id="redirect-uri-help" class="redirect-uri-help">
-            <summary>Trouble logging in?</summary>
-            <p class="muted">
-              Spotify checks this app's Redirect URI exactly. If "Log in with
-              Spotify" lands on a Spotify error page instead of the sign-in
-              form, add the address below as a Redirect URI for this app at
-              the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a>
-              (Redirect URIs → Add → then <strong>Save</strong> — easy to
-              miss), then try again.
-            </p>
-            <div class="redirect-uri-row">
-              <code id="redirect-uri-value"></code>
-              <button type="button" id="copy-redirect-uri-btn" class="small-btn">Copy</button>
-            </div>
-            <p id="redirect-uri-status" class="muted" aria-live="polite"></p>
-          </details>
-        </div>
-      </section>
-
       <!-- Kid mode -->
       <section id="kid-mode" class="view" hidden>
         <canvas id="kid-bg-visualizer" class="kid-bg-visualizer" aria-hidden="true" hidden></canvas>
@@ -143,39 +118,6 @@
           <button type="button" id="add-kid-btn" class="small-btn">+ Add another kid</button>
         </section>
 
-        <section class="parent-section quick-setup-section">
-          <h2>Quick setup</h2>
-          <label class="settings-field">
-            Kid's name (optional)
-            <input id="kid-name-input" type="text" class="text-input" placeholder="e.g. Emma" maxlength="40" />
-          </label>
-          <label class="settings-field">
-            Playlist link
-            <input id="quick-playlist-input" type="text" class="text-input" placeholder="Paste a Spotify playlist link you own or collaborate on" />
-          </label>
-          <button id="quick-playlist-btn" class="big-btn">Load playlist as tiles</button>
-          <div id="quick-playlist-status" class="muted"></div>
-          <div id="quick-playlist-error" class="warning" hidden></div>
-          <div id="quick-playlist-open-row" class="quick-playlist-open-row" hidden>
-            <a id="quick-playlist-open-link" href="#" target="_blank" rel="noopener" class="small-btn">Open playlist in Spotify ↗</a>
-          </div>
-        </section>
-
-        <section class="parent-section">
-          <h2>Account</h2>
-          <div id="account-info"></div>
-          <div id="token-warning" class="warning" hidden></div>
-          <div id="scope-warning" class="warning" hidden></div>
-          <details id="scope-details" class="scope-details" hidden>
-            <summary>Technical details</summary>
-            <div id="scope-info" class="muted"></div>
-          </details>
-          <div class="row-actions">
-            <button id="logout-btn" class="small-btn">Log out</button>
-            <button id="relogin-btn" class="small-btn">Log in again</button>
-          </div>
-        </section>
-
         <section class="parent-section">
           <h2>Songs (<span id="tile-count">0</span>)</h2>
           <div id="tile-count-warning" class="warning" hidden></div>
@@ -185,26 +127,23 @@
 
         <section class="parent-section">
           <h2>Add songs</h2>
-          <div class="tabs">
-            <button type="button" id="tab-search" class="tab-btn active">Search</button>
-            <button type="button" id="tab-playlist" class="tab-btn">From playlist</button>
-          </div>
-          <div id="search-panel">
-            <input id="search-input" type="search" placeholder="Search for a song" class="text-input" />
-            <div id="search-results" class="result-list"></div>
-            <button id="search-load-more" class="small-btn" hidden>Load more</button>
-          </div>
-          <div id="playlist-panel" hidden>
-            <input id="playlist-input" type="text" placeholder="Paste a Spotify playlist link" class="text-input" />
-            <button id="playlist-fetch-btn" class="small-btn">Fetch songs</button>
-            <div id="playlist-error" class="warning" hidden></div>
-            <button id="playlist-add-all-btn" class="small-btn" hidden>Add all</button>
-            <div id="playlist-results" class="result-list"></div>
-          </div>
+          <p class="muted">
+            Paste a YouTube link or video ID for each song — one per line — then
+            look them up to see the title, channel, and thumbnail before adding.
+          </p>
+          <textarea id="add-links-input" class="text-input" rows="3" placeholder="https://www.youtube.com/watch?v=… (one per line)"></textarea>
+          <button id="add-links-btn" class="small-btn">Look up</button>
+          <div id="add-links-error" class="warning" hidden></div>
+          <button id="add-all-btn" class="small-btn" hidden>Add all</button>
+          <div id="add-links-results" class="result-list"></div>
         </section>
 
         <section class="parent-section">
           <h2>Settings</h2>
+          <label class="settings-field">
+            Kid's name
+            <input id="kid-name-input" type="text" class="text-input" placeholder="e.g. Emma" maxlength="40" />
+          </label>
           <fieldset class="settings-field">
             <legend>Tile style</legend>
             <label><input type="radio" name="tile-display" value="cover" /> Cover art</label>

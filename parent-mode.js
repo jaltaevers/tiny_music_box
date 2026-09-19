@@ -1,9 +1,8 @@
 import { tileFromTrack, validateImportedConfig, encodeShareLink, hashPin, extractEmoji, MAX_OVERRIDE_EMOJI } from './store.js';
-import { getLoginAgeInfo, loadTokens } from './auth.js';
+import { fetchVideoMetadata } from './youtube-api.js';
 import { confirmDialog, alertDialog, promptDialog } from './dialog.js';
 
 const EMOJI_COLOR_DEFAULT = '#5b5bd6';
-const REQUIRED_PLAYLIST_SCOPE = 'playlist-read-private';
 
 export function reorderArray(arr, fromIndex, toIndex) {
   const copy = arr.slice();
@@ -12,16 +11,8 @@ export function reorderArray(arr, fromIndex, toIndex) {
   return copy;
 }
 
-function formatDuration(ms) {
-  const totalSeconds = Math.round(ms / 1000);
-  const m = Math.floor(totalSeconds / 60);
-  const s = totalSeconds % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
 export function createParentMode({
   els,
-  api,
   getSavedConfig,
   saveAndApply,
   getKids,
@@ -31,14 +22,9 @@ export function createParentMode({
   onRemoveKid,
   onChangePin,
   onDone,
-  onLogout,
-  onRelogin,
-  onReauthRequired,
 }) {
   let draft = null;
-  let searchOffset = 0;
-  let searchQuery = '';
-  let searchDebounce = null;
+  let lastLookupResults = [];
 
   function existingUris() {
     return new Set(draft.tiles.map((t) => t.uri));
@@ -57,19 +43,6 @@ export function createParentMode({
       const tab = document.createElement('button');
       tab.type = 'button';
       tab.className = 'kid-tab' + (kid.id === activeId ? ' active' : '');
-
-      // A playlist link with still no songs means either it hasn't been
-      // loaded yet or a background auto-fetch attempt failed silently —
-      // this is the only place that would otherwise surface, since that
-      // background fetch has nowhere else to report a failure to.
-      if (kid.sourcePlaylistUrl && kid.tiles.length === 0) {
-        const warn = document.createElement('span');
-        warn.className = 'kid-tab-warning';
-        warn.textContent = '⚠️';
-        warn.setAttribute('aria-label', `${kidLabel(kid)} still needs songs loaded`);
-        warn.title = 'Playlist linked but not loaded yet — open this tab and try Load playlist as tiles.';
-        tab.appendChild(warn);
-      }
 
       const label = document.createElement('span');
       label.textContent = kidLabel(kid);
@@ -99,46 +72,6 @@ export function createParentMode({
     if (kidId === getActiveKidId()) return;
     if (hasUnsavedChanges() && !(await confirmDialog('Switch kids without saving changes first?'))) return;
     onSwitchKid(kidId);
-  }
-
-  function renderAccount(profile) {
-    els.accountInfo.textContent = profile ? profile.display_name || profile.id : 'Not logged in';
-    const info = getLoginAgeInfo();
-    if (info && info.expiringSoon) {
-      els.tokenWarning.hidden = false;
-      els.tokenWarning.textContent =
-        info.daysRemaining > 0
-          ? `Your Spotify login may need renewing in about ${info.daysRemaining} day(s).`
-          : 'Your Spotify login may have expired — log in again if playback stops working.';
-    } else {
-      els.tokenWarning.hidden = true;
-    }
-
-    // A scope is granted (or not) once, at the moment this login was
-    // created — adding playlist-read-private to config.js does nothing
-    // for a session that logged in before that change. Without this
-    // check, that shows up as every single playlist 403ing regardless of
-    // who owns it, which reads exactly like an ownership problem but
-    // isn't one.
-    const tokens = loadTokens();
-    const grantedScopes = (tokens && tokens.scope) || '';
-    // Shown plainly rather than just checked internally — the "log in
-    // again" fix for a missing scope has a real failure mode of its own
-    // (Spotify silently reusing a prior consent instead of granting the
-    // newly-requested one), so whether that actually worked needs to be
-    // directly checkable rather than inferred from yet another guess. But
-    // raw scope identifiers are pure developer jargon, so it's tucked
-    // behind a collapsed "Technical details" disclosure (same pattern as
-    // the login screen's own troubleshooting section) instead of dumped in
-    // front of every parent on every visit.
-    els.scopeDetails.hidden = !(tokens && tokens.scope);
-    els.scopeInfo.textContent = tokens && tokens.scope ? `Permissions granted: ${tokens.scope}` : '';
-    const missingPlaylistScope = !grantedScopes.split(' ').includes(REQUIRED_PLAYLIST_SCOPE);
-    els.scopeWarning.hidden = !missingPlaylistScope;
-    if (missingPlaylistScope) {
-      els.scopeWarning.textContent =
-        'This login doesn’t have permission to read playlists yet (added after you first logged in) — tap "Log in again" below to pick it up. No need to log out first.';
-    }
   }
 
   function renderTileCount() {
@@ -333,45 +266,35 @@ export function createParentMode({
   }
 
   function renderResultRow(track, container) {
-    if (draft.settings.hideExplicit && track.explicit) return;
-
     const row = document.createElement('div');
     row.className = 'result-row';
     const thumb = document.createElement('div');
     thumb.className = 'tile-thumb';
-    const art = track.album && track.album.images && track.album.images[0];
-    if (art) thumb.style.backgroundImage = `url("${art.url}")`;
+    if (track.thumbnailUrl) thumb.style.backgroundImage = `url("${track.thumbnailUrl}")`;
     else thumb.textContent = '🎵';
 
     const meta = document.createElement('div');
     meta.className = 'tile-meta';
     const titleEl = document.createElement('div');
     titleEl.className = 'tile-title';
-    titleEl.textContent = track.name;
+    titleEl.textContent = track.title;
     const artistEl = document.createElement('div');
     artistEl.className = 'tile-artist';
-    artistEl.textContent = `${(track.artists || []).map((a) => a.name).join(', ')} · ${formatDuration(track.duration_ms)}`;
+    artistEl.textContent = track.channelTitle;
     meta.appendChild(titleEl);
     meta.appendChild(artistEl);
-    if (track.explicit) {
-      const badge = document.createElement('span');
-      badge.className = 'explicit-badge';
-      badge.textContent = 'E';
-      badge.setAttribute('aria-label', 'Explicit lyrics');
-      badge.title = 'Explicit lyrics';
-      meta.appendChild(badge);
-    }
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'tile-action-btn';
-    const already = existingUris().has(track.uri);
+    const uri = `youtube:video:${track.videoId}`;
+    const already = existingUris().has(uri);
     addBtn.textContent = already ? 'Added' : 'Add';
     addBtn.disabled = already;
     addBtn.addEventListener('click', () => {
       draft.tiles.push(tileFromTrack(track));
       renderTileList();
-      renderResults(container === els.searchResults ? lastSearchResults : lastPlaylistResults, container);
+      renderResults(lastLookupResults, els.addLinksResults);
     });
 
     row.appendChild(thumb);
@@ -380,158 +303,70 @@ export function createParentMode({
     container.appendChild(row);
   }
 
-  let lastSearchResults = [];
-  let lastPlaylistResults = [];
-
   function renderResults(tracks, container) {
     container.innerHTML = '';
     tracks.forEach((t) => renderResultRow(t, container));
-    // renderResultRow silently skips explicit tracks under the same
-    // condition when hideExplicit is on — without this, a hidden result
-    // just looks like a song that isn't on Spotify at all.
-    const hiddenCount = draft.settings.hideExplicit ? tracks.filter((t) => t.explicit).length : 0;
-    if (hiddenCount > 0) {
-      const note = document.createElement('div');
-      note.className = 'muted explicit-hidden-note';
-      note.textContent = `${hiddenCount} explicit result${hiddenCount === 1 ? '' : 's'} hidden — turn off “Hide explicit tracks” in Settings to see them.`;
-      container.appendChild(note);
-    }
   }
 
-  async function runSearch(reset) {
-    if (!searchQuery.trim()) {
-      lastSearchResults = [];
-      renderResults([], els.searchResults);
-      els.searchLoadMore.hidden = true;
+  // Looks up every pasted link/id in parallel — each is an independent,
+  // unauthenticated oEmbed call (see youtube-api.js), so there's no
+  // shared rate limit or batching concern the way Spotify's chunked
+  // getTracksByIds had. A link that fails (private video, typo, deleted)
+  // is reported but doesn't block the others from showing up to add.
+  async function lookupLinks() {
+    els.addLinksError.hidden = true;
+    const lines = els.addLinksInput.value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length === 0) {
+      els.addLinksError.hidden = false;
+      els.addLinksError.textContent = 'Paste at least one YouTube link or video ID.';
       return;
     }
-    if (reset) searchOffset = 0;
+
+    els.addLinksBtn.disabled = true;
+    els.addLinksBtn.textContent = 'Looking up…';
     try {
-      const { items, hasMore } = await api.searchTracks(searchQuery, searchOffset, 10);
-      lastSearchResults = reset ? items : lastSearchResults.concat(items);
-      renderResults(lastSearchResults, els.searchResults);
-      els.searchLoadMore.hidden = !hasMore;
-      searchOffset += items.length;
-    } catch (e) {
-      handleApiError(e, els.searchResults);
-    }
-  }
+      const settled = await Promise.all(
+        lines.map(async (line) => {
+          try {
+            return { ok: true, track: await fetchVideoMetadata(line) };
+          } catch (e) {
+            return { ok: false, input: line, message: e.message };
+          }
+        })
+      );
+      const tracks = settled.filter((r) => r.ok).map((r) => r.track);
+      const failed = settled.filter((r) => !r.ok);
 
-  function handleApiError(e, container) {
-    if (e && e.status === 401 && onReauthRequired) {
-      onReauthRequired();
-      return;
-    }
-    const el = document.createElement('div');
-    el.className = 'warning';
-    el.textContent = e && e.retryAfterSeconds ? `Spotify asked us to slow down — try again in ${e.retryAfterSeconds}s.` : (e && e.message) || 'Something went wrong';
-    if (container) {
-      container.innerHTML = '';
-      container.appendChild(el);
-    }
-  }
+      lastLookupResults = tracks;
+      renderResults(tracks, els.addLinksResults);
+      els.addAllBtn.hidden = tracks.length === 0;
 
-  function extractSpotifyErrorDetail(body) {
-    if (!body) return null;
-    try {
-      const parsed = JSON.parse(body);
-      return (parsed && parsed.error && parsed.error.message) || null;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function describePlaylistError(e) {
-    if (e && e.status === 403) {
-      const detail = extractSpotifyErrorDetail(e.body);
-      const said = detail ? ` Spotify’s own message: “${detail}.”` : '';
-      // Not a missing scope (checkable directly in Account → Permissions
-      // granted) and not ownership (a fully public playlist 403s exactly
-      // the same way, and ownership can't gate a public one) — both were
-      // ruled out by direct testing, not assumption. What's left is
-      // Spotify's Development Mode blocking playlist-track reads outright
-      // until this app is granted Extended Quota Mode — check this app's
-      // status at developer.spotify.com/dashboard.
-      return `Can’t read this playlist (error 403).${said} This isn’t a login or ownership problem — a fully public playlist fails the same way. It looks like Spotify’s Development Mode is blocking playlist reading for this app entirely until it’s granted Extended Quota Mode (check this app’s status at the Spotify Developer Dashboard). Until then, add songs individually via Search instead — that endpoint isn’t affected.`;
-    }
-    return (e && e.message) || 'Couldn’t fetch that playlist.';
-  }
-
-  async function fetchPlaylist() {
-    els.playlistError.hidden = true;
-    els.playlistResults.innerHTML = '';
-    els.playlistAddAllBtn.hidden = true;
-    const link = els.playlistInput.value.trim();
-    if (!link) return;
-    try {
-      const tracks = await api.getPlaylistItems(link);
-      lastPlaylistResults = tracks;
-      renderResults(tracks, els.playlistResults);
-      els.playlistAddAllBtn.hidden = tracks.length === 0;
-    } catch (e) {
-      els.playlistError.hidden = false;
-      els.playlistError.textContent = describePlaylistError(e);
-    }
-  }
-
-  function renderQuickPlaylistLink() {
-    // Re-derive the id from the stored URL rather than using it as-is:
-    // extractPlaylistId only ever returns null or a bare alphanumeric id,
-    // which keeps this safe to drop straight into an href even if
-    // sourcePlaylistUrl came from an imported file or a setup link (both
-    // of which can carry data from outside this app).
-    const id = draft.sourcePlaylistUrl ? api.extractPlaylistId(draft.sourcePlaylistUrl) : null;
-    els.quickPlaylistOpenRow.hidden = !id;
-    if (id) els.quickPlaylistOpenLink.href = `https://open.spotify.com/playlist/${id}`;
-  }
-
-  async function quickSetupFromPlaylist() {
-    els.quickPlaylistError.hidden = true;
-    els.quickPlaylistStatus.textContent = '';
-    const link = els.quickPlaylistInput.value.trim();
-    if (!link) {
-      els.quickPlaylistError.hidden = false;
-      els.quickPlaylistError.textContent = 'Paste a playlist link first.';
-      return;
-    }
-    if (draft.tiles.length > 0) {
-      const ok = await confirmDialog(`This replaces your current ${draft.tiles.length} song(s) with tracks from this playlist. Continue?`, { title: 'Replace songs?' });
-      if (!ok) return;
-    }
-    els.quickPlaylistStatus.textContent = 'Loading…';
-    try {
-      const tracks = await api.getPlaylistItems(link);
-      const eligible = tracks.filter((t) => !(draft.settings.hideExplicit && t.explicit));
-      if (eligible.length < 1) {
-        els.quickPlaylistStatus.textContent = '';
-        els.quickPlaylistError.hidden = false;
-        els.quickPlaylistError.textContent =
-          tracks.length === 0
-            ? 'Couldn’t find any songs in that playlist — double check the link, or that it’s a playlist you own or collaborate on.'
-            : 'Every song in that playlist is marked explicit, and explicit tracks are hidden — turn that off in Settings below, or add songs individually with Search.';
-        return;
+      if (failed.length > 0) {
+        els.addLinksError.hidden = false;
+        els.addLinksError.textContent =
+          failed.length === lines.length
+            ? `Couldn’t look up ${failed.length === 1 ? 'that link' : 'any of those'}: ${failed[0].message}`
+            : `${failed.length} of ${lines.length} link(s) couldn’t be looked up (the rest are shown below): ${failed[0].message}`;
       }
-      draft.tiles = eligible.map((t) => tileFromTrack(t));
-      draft.sourcePlaylistUrl = link;
-      renderTileList();
-      renderQuickPlaylistLink();
-      els.quickPlaylistStatus.textContent = `Loaded ${eligible.length} song(s) from this playlist — tap Save when you're happy, or fine-tune below first.`;
-    } catch (e) {
-      els.quickPlaylistStatus.textContent = '';
-      els.quickPlaylistError.hidden = false;
-      els.quickPlaylistError.textContent = describePlaylistError(e);
+    } finally {
+      els.addLinksBtn.disabled = false;
+      els.addLinksBtn.textContent = 'Look up';
     }
   }
 
-  function addAllFromPlaylist() {
+  function addAllLookedUp() {
     const uris = existingUris();
-    for (const track of lastPlaylistResults) {
-      if (uris.has(track.uri) || (draft.settings.hideExplicit && track.explicit)) continue;
+    for (const track of lastLookupResults) {
+      const uri = `youtube:video:${track.videoId}`;
+      if (uris.has(uri)) continue;
       draft.tiles.push(tileFromTrack(track));
-      uris.add(track.uri);
+      uris.add(uri);
     }
     renderTileList();
-    renderResults(lastPlaylistResults, els.playlistResults);
+    renderResults(lastLookupResults, els.addLinksResults);
   }
 
   function renderSettings() {
@@ -580,8 +415,6 @@ export function createParentMode({
     });
     els.hideExplicitToggle.addEventListener('change', () => {
       draft.settings.hideExplicit = els.hideExplicitToggle.checked;
-      renderResults(lastSearchResults, els.searchResults);
-      renderResults(lastPlaylistResults, els.playlistResults);
     });
     els.songLockToggle.addEventListener('change', () => {
       draft.settings.songLockEnabled = els.songLockToggle.checked;
@@ -601,24 +434,9 @@ export function createParentMode({
     });
   }
 
-  function bindSearch() {
-    els.searchInput.addEventListener('input', () => {
-      searchQuery = els.searchInput.value;
-      clearTimeout(searchDebounce);
-      searchDebounce = setTimeout(() => runSearch(true), 400);
-    });
-    els.searchLoadMore.addEventListener('click', () => runSearch(false));
-    els.playlistFetchBtn.addEventListener('click', fetchPlaylist);
-    els.playlistAddAllBtn.addEventListener('click', addAllFromPlaylist);
-    els.tabSearchBtn.addEventListener('click', () => switchTab('search'));
-    els.tabPlaylistBtn.addEventListener('click', () => switchTab('playlist'));
-  }
-
-  function switchTab(tab) {
-    els.tabSearchBtn.classList.toggle('active', tab === 'search');
-    els.tabPlaylistBtn.classList.toggle('active', tab === 'playlist');
-    els.searchPanel.hidden = tab !== 'search';
-    els.playlistPanel.hidden = tab !== 'playlist';
+  function bindAddLinks() {
+    els.addLinksBtn.addEventListener('click', lookupLinks);
+    els.addAllBtn.addEventListener('click', addAllLookedUp);
   }
 
   function hasUnsavedChanges() {
@@ -660,7 +478,6 @@ export function createParentMode({
         draft = { ...draft, ...parsed }; // keep this kid's id — only the tiles/settings/source are imported
         renderTileList();
         renderSettings();
-        renderQuickPlaylistLink();
         els.saveStatus.textContent = 'Imported — tap Save to apply.';
       } catch (e) {
         await alertDialog('Couldn’t import that file: ' + e.message);
@@ -688,12 +505,8 @@ export function createParentMode({
     }
     els.doneBtn.addEventListener('click', handleDoneClick);
     els.doneBtnBottom.addEventListener('click', handleDoneClick);
-
-    els.logoutBtn.addEventListener('click', onLogout);
-    els.reloginBtn.addEventListener('click', onRelogin);
   }
 
-  els.quickPlaylistBtn.addEventListener('click', quickSetupFromPlaylist);
   els.addKidBtn.addEventListener('click', async () => {
     const name = await promptDialog('New kid’s name:', '', { title: 'Add a kid' });
     if (name === null) return;
@@ -701,45 +514,25 @@ export function createParentMode({
   });
 
   bindSettings();
-  bindSearch();
+  bindAddLinks();
   bindSaveActions();
 
   return {
     // Synchronous on purpose: app.js calls this right after switching the
-    // view to parent mode, and every settings/search control's event
+    // view to parent mode, and every settings/add-links control's event
     // listener (bound once, above, not per-show) reaches into `draft`
-    // assuming it already exists. profile can be stale or null (whatever
-    // was cached from the last /me fetch, or nothing yet on first login)
-    // — it's only display info, and setAccountProfile() below fills in
-    // the real thing once that fetch actually resolves, without touching
-    // draft again and discarding whatever's being edited in the meantime.
-    show(profile) {
+    // assuming it already exists the moment this view is interactive.
+    show() {
       draft = JSON.parse(JSON.stringify(getSavedConfig()));
       clearRemoveUndoStatus();
-      renderAccount(profile);
       renderKidTabs();
       renderTileList();
       renderSettings();
-      lastSearchResults = [];
-      lastPlaylistResults = [];
-      els.searchInput.value = '';
-      els.playlistInput.value = '';
-      els.searchResults.innerHTML = '';
-      els.playlistResults.innerHTML = '';
-      els.playlistError.hidden = true;
-      els.playlistAddAllBtn.hidden = true;
-      els.quickPlaylistInput.value = draft.sourcePlaylistUrl || '';
-      els.quickPlaylistStatus.textContent = '';
-      els.quickPlaylistError.hidden = true;
-      renderQuickPlaylistLink();
-      switchTab('search');
-    },
-    // Updates just the Account panel once the real /me fetch resolves —
-    // deliberately not routed through show() again, which would clobber
-    // draft (and anything the parent's mid-editing) with a fresh copy of
-    // the saved config.
-    setAccountProfile(profile) {
-      renderAccount(profile);
+      lastLookupResults = [];
+      els.addLinksInput.value = '';
+      els.addLinksResults.innerHTML = '';
+      els.addLinksError.hidden = true;
+      els.addAllBtn.hidden = true;
     },
   };
 }

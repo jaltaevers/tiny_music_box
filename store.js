@@ -5,6 +5,8 @@
 // The store holds multiple named kids, each with their own tiles and
 // playback settings, plus one PIN shared by the whole device (not
 // per-kid — it gates parent mode itself, before any kid is selected).
+import { extractVideoId } from './youtube-player.js';
+
 const STORAGE_KEY = 'kmt_config_v1';
 
 export const DEFAULT_KID_SETTINGS = {
@@ -147,20 +149,15 @@ export function saveStore(store) {
   });
 }
 
-// One-time seed: the three kids this app was actually built for, with the
-// playlists their parent already had ready — pasted into chat, but never
-// actually reachable from there (no path to fetch real Spotify data
-// without that parent's own logged-in session). Pre-filling the link at
-// least means opening Quick Setup for each kid here just needs one "Load
-// playlist as tiles" tap instead of retyping the name and re-pasting the
-// link. Runs once — the familySeeded flag keeps it from re-adding a kid
-// that's since been renamed or removed on purpose. An existing kid's own
-// tiles and playlist link (if already set) are left untouched.
-const FAMILY_SEED = [
-  { name: 'Rafa', playlistUrl: 'https://open.spotify.com/playlist/0cZMNCeq5IYNIBe4pY5YeA?si=KbvG6clTRv-RVIdWFJHcLg&utm_source=copy-link&pi=ICcMeTSgTMqZj' },
-  { name: 'Alma', playlistUrl: 'https://open.spotify.com/playlist/2fisy00ch7XMPOHFXrlODV?si=6omhWRXNSOavUJvJvvC5mw&utm_source=copy-link&pi=sGV1CDrQRKqwa' },
-  { name: 'Lily', playlistUrl: 'https://open.spotify.com/playlist/7jbCdxWJJSBu0KO8UzbRD5?si=mGiye45DTv6HYJSZy_Qo7A&utm_source=copy-link&pi=x9lQ7FjlR0eiI' },
-];
+// One-time seed: the three kids this app was actually built for. Used to
+// also pre-fill a Spotify playlist link for Quick Setup's one-tap import
+// — dropped along with Quick Setup itself once playlist-fetching went
+// away with Spotify (see parent-mode.js); a name is still worth seeding
+// so the family's own device starts with the right three kids instead of
+// one blank one, even though each now needs songs added by hand. Runs
+// once — the familySeeded flag keeps it from re-adding a kid that's
+// since been renamed or removed on purpose.
+const FAMILY_SEED = ['Rafa', 'Alma', 'Lily'];
 
 function isBlankPlaceholderKid(k) {
   return !k.settings.kidName && k.tiles.length === 0 && !k.sourcePlaylistUrl;
@@ -173,17 +170,9 @@ export function seedFamilyIfNeeded(store) {
   // placeholder, not something the user made, so seeding drops it rather
   // than leaving it sitting alongside the three real kids.
   let kids = store.kids.length === 1 && isBlankPlaceholderKid(store.kids[0]) ? [] : store.kids;
-  for (const { name, playlistUrl } of FAMILY_SEED) {
-    const existing = kids.find((k) => (k.settings.kidName || '').trim().toLowerCase() === name.toLowerCase());
-    if (existing) {
-      if (!existing.sourcePlaylistUrl) {
-        kids = kids.map((k) => (k === existing ? { ...k, sourcePlaylistUrl: playlistUrl } : k));
-      }
-    } else {
-      const kid = makeKid(name);
-      kid.sourcePlaylistUrl = playlistUrl;
-      kids = [...kids, kid];
-    }
+  for (const name of FAMILY_SEED) {
+    const exists = kids.some((k) => (k.settings.kidName || '').trim().toLowerCase() === name.toLowerCase());
+    if (!exists) kids = [...kids, makeKid(name)];
   }
   const activeKidId = kids.some((k) => k.id === store.activeKidId) ? store.activeKidId : kids[0].id;
   return { ...store, kids, activeKidId, familySeeded: true };
@@ -210,11 +199,15 @@ export function removeKid(store, kidId) {
 export function tileFromTrack(track, overrides = {}) {
   return {
     id: makeTileId(),
-    uri: track.uri,
-    title: track.name,
-    artist: (track.artists || []).map((a) => a.name).join(', '),
-    albumArtUrl: track.album && track.album.images && track.album.images[0] ? track.album.images[0].url : null,
-    durationMs: track.duration_ms || 0,
+    uri: `youtube:video:${track.videoId}`,
+    title: track.title || '',
+    artist: track.channelTitle || '',
+    albumArtUrl: track.thumbnailUrl || null,
+    durationMs: track.durationMs || 0,
+    // YouTube's public metadata (oEmbed, or the Data API) has no
+    // per-video explicit-content flag the way Spotify's catalog did, so
+    // nothing currently sets this true — it stays meaningful for a
+    // manual override or a future source that does provide it.
     explicit: !!track.explicit,
     override: null,
     ...overrides,
@@ -238,7 +231,7 @@ export async function checkPin(pin, pinHash) {
   return (await sha256Hex(pin)) === pinHash;
 }
 
-const TRACK_URI_RE = /^spotify:track:[A-Za-z0-9]+$/;
+const TRACK_URI_RE = /^youtube:video:[A-Za-z0-9_-]{11}$/;
 
 // Imports/exports one kid at a time — the file a parent exports from
 // "Songs" is that kid's tiles/settings, not the whole roster.
