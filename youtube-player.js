@@ -137,8 +137,20 @@ const AD_POLL_INTERVAL_MS = 1000;
  * @param {boolean} [options.muteDuringSuspectedAds=true] - See the
  *   "Ad detection" section below: whether a suspected ad is played back
  *   muted (ducked to 0) until real content resumes.
+ * @param {boolean} [options.useSignedInSession=false] - Embeds from
+ *   youtube.com instead of youtube-nocookie.com. YouTube restricts
+ *   background/lock-screen playback (this app's biggest real limitation)
+ *   to Premium accounts, enforced by YouTube's own player regardless of
+ *   embed domain — this does NOT bypass that. The only thing it can do
+ *   is give the iframe a *chance* to inherit an already-signed-in
+ *   Premium session already present in this browser (the youtube-
+ *   nocookie.com domain deliberately avoids that session — that's the
+ *   whole point of it). Off by default: it trades away that privacy
+ *   property for a fix that isn't guaranteed to do anything even when
+ *   the browser IS signed into Premium — see parent-mode.js's UI for
+ *   this, which explains the same trade-off to whoever flips it on.
  */
-export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAds = true } = {}) {
+export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAds = true, useSignedInSession = false } = {}) {
   let ytPlayer = null;
   let ready = false;
   let pausedFlag = true;
@@ -541,7 +553,12 @@ export function createYouTubePlayer({ mountEl, volume = 1, muteDuringSuspectedAd
         new Promise((resolve, reject) => {
           try {
             ytPlayer = new YT.Player(target, {
-              host: 'https://www.youtube-nocookie.com', // privacy-enhanced mode — no third-party cookies until playback actually starts
+              // Privacy-enhanced by default (no third-party cookies until
+              // playback starts); useSignedInSession trades that for a
+              // chance at inheriting an already-signed-in session instead
+              // — see this function's own doc comment for why that's not
+              // guaranteed to do anything.
+              host: useSignedInSession ? 'https://www.youtube.com' : 'https://www.youtube-nocookie.com',
               width: '1',
               height: '1',
               playerVars: {

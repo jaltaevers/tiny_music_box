@@ -31,9 +31,13 @@ control surface, needed no changes at all. It also includes a best-effort
 against what a tile expects) with volume ducking while one's suspected —
 see that file's own comments for exactly how, and why it's a guess, never
 a certainty (the IFrame API has no documented way to detect an ad
-directly). `youtube-player-demo.html`/`.js` is a standalone page that
-exercises the engine on its own, independent of the rest of the app —
-useful for testing playback/controls/the ad notice in isolation.
+directly) — and registers a real Media Session (play/pause/skip on the
+lock screen/notification shade, with the actual title/artist/artwork),
+which needs a whole tile object rather than a bare uri to work from —
+see `kid-mode.js`'s `playTracks()` call sites. `youtube-player-demo.html`/
+`.js` is a standalone page that exercises the engine on its own,
+independent of the rest of the app — useful for testing playback/
+controls/the ad notice/Media Session in isolation.
 
 **How adding songs works:** parent mode's "Add songs" takes one or more
 YouTube links or video IDs (one per line) and looks each up via YouTube's
@@ -57,18 +61,39 @@ is what makes this work without any credential setup at all.
 - **No "hide explicit tracks" filtering for real** — nothing in YouTube's
   public metadata flags a video explicit the way Spotify's catalog did,
   so that toggle is currently a no-op for songs added this way.
-- **No YouTube Premium / ad-free detection.** This was asked for and is
-  worth explaining precisely: there is no way for this app's own page to
-  make the *hidden iframe* play as a signed-in, Premium account. The
-  iframe is a separate, cross-origin browsing context with its own
-  cookie jar — a "Login" button in this app cannot establish a YouTube
-  session inside it. The only way ads would be suppressed is if the
-  *browser itself* already has an ambient signed-in YouTube/Google
-  session with Premium, and even then: this app deliberately embeds via
-  `youtube-nocookie.com` for privacy, which specifically avoids reading
-  the regular, cookied `youtube.com` session — the two goals are in
-  direct tension. Nothing here currently attempts this; the volume-ducking
-  heuristic above is the practical mitigation instead.
+- **No YouTube Premium / ad-free detection, and — the bigger one —
+  playback pauses when you switch apps or lock the screen.** These are
+  the same underlying restriction. Confirmed via research, current as of
+  2026: YouTube treats background/lock-screen continuation as a
+  Premium-exclusive feature and actively enforces it in its own
+  player — for the youtube.com site, for third-party mobile browsers,
+  and specifically for third-party `<iframe>` embeds like this one —
+  citing their "Device and Network Abuse" policy. That's YouTube's own
+  player pausing itself the moment the page isn't visible; it is not a
+  bug here, and nothing client-side (Media Session API, resizing the
+  iframe, anything else in this app's control) touches it, because the
+  restriction is enforced by YouTube's backend recognizing "this tab
+  isn't visible," not by generic browser tab-throttling.
+
+  There is also no way for this app's own page to make the *hidden
+  iframe* play as a signed-in, Premium account — the iframe is a
+  separate, cross-origin browsing context with its own cookie jar, so a
+  "Login" button in this app's own UI cannot establish a YouTube session
+  inside it. The only thing that could ever help is the *browser itself*
+  already having an ambient signed-in Premium session, and this app
+  embeds via `youtube-nocookie.com` by default specifically to *avoid*
+  reading that session, for privacy. Parent mode's Settings has an
+  opt-in **"Background playback (experimental)"** toggle
+  (`useSignedInYouTubeSession` in the store, `useSignedInSession` on
+  `createYouTubePlayer`) that switches to the regular, cookied
+  `youtube.com` embed instead, purely to give that ambient-session path
+  a chance — off by default, device-wide (like the PIN), reloads the app
+  to apply since the embed domain is fixed at player construction time.
+  Explained to whoever might flip it on, in the UI itself, not just here:
+  it isn't guaranteed to do anything even when the browser *is* signed
+  into Premium, since the restriction reads as account-gated rather than
+  purely cookie-gated. The volume-ducking ad heuristic above remains the
+  practical, always-on mitigation regardless of this toggle.
 
 ## First run
 

@@ -122,19 +122,19 @@ function migrateLegacyStore(stored) {
       songLockEnabled: legacySettings.songLockEnabled != null ? legacySettings.songLockEnabled : DEFAULT_KID_SETTINGS.songLockEnabled,
     },
   };
-  return { kids: [kid], activeKidId: kid.id, pinHash: legacySettings.pinHash || null, familySeeded: false };
+  return { kids: [kid], activeKidId: kid.id, pinHash: legacySettings.pinHash || null, familySeeded: false, useSignedInYouTubeSession: false };
 }
 
 export function loadStore() {
   const stored = readJson(STORAGE_KEY);
   if (!stored) {
     const kid = makeKid('');
-    return { kids: [kid], activeKidId: kid.id, pinHash: null, familySeeded: false };
+    return { kids: [kid], activeKidId: kid.id, pinHash: null, familySeeded: false, useSignedInYouTubeSession: false };
   }
   if (Array.isArray(stored.kids) && stored.kids.length > 0) {
     const kids = stored.kids.map(normalizeKid);
     const activeKidId = kids.some((k) => k.id === stored.activeKidId) ? stored.activeKidId : kids[0].id;
-    return { kids, activeKidId, pinHash: stored.pinHash || null, familySeeded: !!stored.familySeeded };
+    return { kids, activeKidId, pinHash: stored.pinHash || null, familySeeded: !!stored.familySeeded, useSignedInYouTubeSession: !!stored.useSignedInYouTubeSession };
   }
   return migrateLegacyStore(stored);
 }
@@ -146,6 +146,12 @@ export function saveStore(store) {
     activeKidId: store.activeKidId,
     pinHash: store.pinHash,
     familySeeded: !!store.familySeeded,
+    // Device-wide, like pinHash — not a per-kid setting, and not part of
+    // any kid's draft/Save cycle (see parent-mode.js): it changes which
+    // domain the hidden iframe embeds from, which is fixed at player
+    // construction time, so toggling it reloads the page immediately
+    // rather than waiting for a kid's own Save.
+    useSignedInYouTubeSession: !!store.useSignedInYouTubeSession,
   });
 }
 

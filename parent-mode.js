@@ -21,6 +21,8 @@ export function createParentMode({
   onAddKid,
   onRemoveKid,
   onChangePin,
+  getUseSignedInSession,
+  onToggleSignedInSession,
   onDone,
 }) {
   let draft = null;
@@ -432,6 +434,27 @@ export function createParentMode({
       await onChangePin(await hashPin(pin));
       await alertDialog('PIN updated.');
     });
+
+    els.signedInSessionBtn.addEventListener('click', async () => {
+      const turningOn = !getUseSignedInSession();
+      const message = turningOn
+        ? 'This switches to YouTube’s regular embed (not the privacy-preserving one this app uses by default) and reloads the app. It might let playback continue when you switch apps — but only if this browser is already signed into a YouTube Premium account, and even then it isn’t guaranteed. Continue?'
+        : 'This switches back to the privacy-preserving embed and reloads the app. Continue?';
+      if (!(await confirmDialog(message, { title: turningOn ? 'Use signed-in session?' : 'Stop using signed-in session?' }))) return;
+      onToggleSignedInSession(turningOn); // reloads the page itself — see app.js
+    });
+  }
+
+  // Device-wide, like the PIN — reflects whatever's actually in effect
+  // right now, not a draft value, since it's applied (and the page
+  // reloaded) the moment the button below is confirmed rather than
+  // waiting on this kid's own Save.
+  function renderSignedInSessionStatus() {
+    const on = getUseSignedInSession();
+    els.signedInSessionBtn.textContent = on ? 'Turn off' : 'Try it';
+    els.signedInSessionStatus.textContent = on
+      ? 'Currently on: using the regular YouTube embed, trying to inherit a signed-in session.'
+      : 'Currently off (default): using the privacy-preserving embed.';
   }
 
   function bindAddLinks() {
@@ -528,6 +551,7 @@ export function createParentMode({
       renderKidTabs();
       renderTileList();
       renderSettings();
+      renderSignedInSessionStatus();
       lastLookupResults = [];
       els.addLinksInput.value = '';
       els.addLinksResults.innerHTML = '';

@@ -184,6 +184,27 @@
             Lock each song for 1 minute (no skipping to another tile right away)
           </label>
           <button id="change-pin-btn" class="small-btn">Change PIN</button>
+
+          <div class="settings-field">
+            <strong>Background playback (experimental)</strong>
+            <p class="muted">
+              Free YouTube accounts can't keep playing once you switch apps or
+              lock the screen — only Premium accounts can, and that's decided
+              by YouTube itself, not by this app. If this device's browser is
+              already signed into a YouTube Premium account, trying to use
+              that session here <em>might</em> let songs keep playing in the
+              background — it isn't guaranteed even then, and it means
+              YouTube's normal tracking cookies get set during playback
+              (this app uses a privacy-preserving embed by default, which
+              turning this on trades away). Applies device-wide, and reloads
+              the app to take effect.
+            </p>
+            <div id="signed-in-session-status" class="muted"></div>
+            <div class="row-actions">
+              <a href="https://www.youtube.com" target="_blank" rel="noopener" class="small-btn">Open YouTube to sign in ↗</a>
+              <button type="button" id="signed-in-session-btn" class="small-btn"></button>
+            </div>
+          </div>
         </section>
 
         <section class="parent-section bottom-actions-section">

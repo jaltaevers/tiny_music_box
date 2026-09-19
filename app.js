@@ -79,6 +79,8 @@ const parentMode = createParentMode({
     hideExplicitToggle: document.getElementById('hide-explicit-toggle'),
     songLockToggle: document.getElementById('song-lock-toggle'),
     changePinBtn: document.getElementById('change-pin-btn'),
+    signedInSessionStatus: document.getElementById('signed-in-session-status'),
+    signedInSessionBtn: document.getElementById('signed-in-session-btn'),
     saveBtn: document.getElementById('save-btn'),
     exportBtn: document.getElementById('export-btn'),
     importBtn: document.getElementById('import-btn'),
@@ -120,6 +122,17 @@ const parentMode = createParentMode({
   onChangePin(pinHash) {
     store = { ...store, pinHash };
     saveStore(store);
+  },
+  getUseSignedInSession: () => store.useSignedInYouTubeSession,
+  onToggleSignedInSession(next) {
+    store = { ...store, useSignedInYouTubeSession: next };
+    saveStore(store);
+    // The player's embed domain is fixed at construction time (it's a
+    // YT.Player constructor option, not something changeable on a live
+    // iframe) — a full reload is the honest way to actually apply this,
+    // rather than leaving the toggle showing a state playback doesn't
+    // match yet until the next natural page load.
+    window.location.reload();
   },
   onDone: async () => {
     if (getActiveKidConfig().tiles.length < 1) {
@@ -182,6 +195,7 @@ async function applyPendingShareLink() {
 async function initPlayerAndKidMode() {
   player = createYouTubePlayer({
     volume: getActiveKidConfig().settings.maxVolume,
+    useSignedInSession: store.useSignedInYouTubeSession,
   });
 
   kidMode = createKidMode({
