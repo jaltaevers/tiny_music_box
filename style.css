@@ -1,0 +1,1251 @@
+:root {
+  color-scheme: dark;
+  /* A dark theme, but a warm purple-tinted one rather than neutral gray —
+     ties parent mode back to kid mode's purple accent family (the gate
+     button/PIN screen already use this hue) instead of reading as an
+     unrelated generic admin panel bolted onto a colorful kids' app. */
+  --bg: #16121f;
+  --surface: #211a2c;
+  --surface-2: #2b2238;
+  --text: #f5f5f5;
+  --muted: #a89cc0;
+  --accent: #7c5ce0;
+  --accent-active: #634ab3;
+  --danger: #ff6b81;
+  --border: #3d3350;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#app {
+  height: 100vh;
+  /* Mobile browsers report 100vh as if their address bar were hidden, so a
+     bottom-anchored absolutely positioned child (the now-playing bar) ends
+     up partly below the actually-visible fold whenever that chrome is
+     shown — it looks shoved against the edge instead of floating above it.
+     100dvh tracks the real, current viewport; older browsers that don't
+     understand it just ignore this line and keep the 100vh above. */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.view {
+  height: 100%;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  font-family: inherit;
+}
+
+h1,
+h2 {
+  font-family: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+}
+
+/* ---------- file:// notice (replaces #app; app.js can't load to hide it itself) ---------- */
+#file-protocol-notice {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+#file-protocol-notice code {
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.9em;
+}
+
+/* ---------- Login ---------- */
+#login-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-card {
+  text-align: center;
+  padding: 24px;
+}
+.login-card h1 {
+  margin-bottom: 24px;
+}
+
+.big-btn {
+  font-size: 1.3rem;
+  padding: 22px 36px;
+  border-radius: 18px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.big-btn:active {
+  background: var(--accent-active);
+}
+.small-btn {
+  font-size: 0.95rem;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.small-btn:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.warning {
+  color: var(--danger);
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.scope-details {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+.scope-details summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+.scope-details .muted {
+  margin-top: 8px;
+}
+.redirect-uri-help {
+  margin-top: 20px;
+  text-align: left;
+  font-size: 0.9rem;
+}
+.redirect-uri-help summary {
+  cursor: pointer;
+  color: var(--muted);
+  text-align: center;
+}
+.redirect-uri-help p {
+  margin: 10px 0;
+}
+.redirect-uri-help a {
+  color: var(--accent);
+}
+.redirect-uri-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.redirect-uri-row code {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.85rem;
+}
+
+/* ---------- Kid mode ---------- */
+#kid-mode {
+  position: relative;
+  height: 100%;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  background: linear-gradient(160deg, #fff3e0 0%, #ffe1ec 45%, #dcf2ff 100%);
+}
+
+.kid-bg-visualizer {
+  /* Sits between #kid-mode's own gradient and everything else in kid
+     mode — an ambient glow behind the tiles, never competing with them.
+     Opacity/blur (in visualizer.js's 'ambient-backdrop' variant) already
+     keeps it subtle; z-index here is what keeps it strictly *behind* the
+     grid rather than relying on DOM order, since an absolutely positioned
+     element doesn't naturally stack below a static sibling that follows it. */
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.4s ease;
+}
+
+.kid-greeting {
+  /* Now that one device serves multiple kids, this is the only reliable
+     "who's up" indicator — the tab/home-screen-icon title is deliberately
+     no longer per-kid (a home-screen shortcut's label is cached by the OS
+     at the moment it's added and won't reflect later switches), so this
+     needs to read clearly at a glance rather than as a small corner badge. */
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 1.3rem;
+  color: #6b5b95;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 8px 22px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(90, 60, 130, 0.15);
+  z-index: 4;
+}
+
+.kid-lock-toast {
+  /* Feedback for "blocked songs mode": shown for a couple seconds when a
+     tap on a different tile is refused because the current song hasn't
+     been playing for a minute yet. opacity: 0 at rest so it's invisible
+     even before .is-visible's animation ever runs a first time; toggling
+     [hidden] off/on (not just the class) restarts the animation reliably
+     even on back-to-back refused taps, since re-inserting into the render
+     tree resets animation state the way just re-adding a class wouldn't. */
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 70px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  background: rgba(40, 30, 60, 0.92);
+  color: #fff;
+  font-family: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 10px 22px;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  white-space: nowrap;
+  opacity: 0;
+}
+.kid-lock-toast.is-visible {
+  animation: lock-toast-pop 1.8s ease-out forwards;
+}
+@keyframes lock-toast-pop {
+  0% {
+    transform: translateX(-50%) translateY(-10px) scale(0.9);
+    opacity: 0;
+  }
+  15% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+  75% {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-50%) translateY(-6px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+.kid-grid {
+  --cols: 2;
+  --rows: 2;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* Both sides of minmax are fixed lengths on purpose, not 1fr: a flexible
+     1fr track always claims its full equal share of the grid's height/
+     width, even once the tile inside it hits its own cap — with few tiles
+     on a tall screen that left each tile stranded, alone, in the middle of
+     an oversized cell, far from its neighbors. Capping the track itself
+     means tiles simply cluster together with `gap` between them, and any
+     leftover room collects around the whole cluster instead (via
+     justify/align-content) rather than between tiles. The 64px floor still
+     keeps tiles tappable if the count grows large enough to shrink them;
+     past that floor the grid overflows its own scroll area rather than
+     shrinking tiles below tap size. Rows get a taller cap than columns —
+     each card is now a circle plus its name below, not a single square
+     filling the whole cell, so a row needs more height than its column
+     has width, or the name would get squeezed. */
+  grid-template-columns: repeat(var(--cols), minmax(64px, 190px));
+  grid-template-rows: repeat(var(--rows), minmax(88px, 236px));
+  justify-content: center;
+  align-content: center;
+  gap: 18px;
+  height: 100%;
+  padding: 20px;
+  /* Extra bottom clearance while the now-playing bar floats over the grid,
+     set by kid-mode.js's updateGridClearance() to that bar's own current
+     height — otherwise its last row of tiles has no way to scroll clear
+     of the bar (see .now-playing-overlay, which floats rather than
+     participating in this layout at all). Defaults to 0 so this is a
+     no-op whenever nothing is playing. */
+  padding-bottom: calc(20px + var(--overlay-clearance, 0px));
+  overflow-y: auto;
+}
+
+/* While one tile is playing, fade the rest back so the active one reads as
+   the obvious answer to "which song is on" at a glance, not just via its
+   own glow/bounce competing against every other pastel tile at full
+   strength. */
+.kid-grid.has-active-tile .kid-tile:not(.is-playing) {
+  opacity: 0.5;
+}
+
+.kid-tile {
+  --tile-color: #ffadad;
+  position: relative;
+  border: none;
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  max-width: 190px;
+  justify-self: center;
+  align-self: center;
+  cursor: pointer;
+  transition: opacity 0.25s ease;
+}
+
+/* The round part of the card — a solid short "bottom edge" instead of a
+   diffuse glow or a colored ring, so it still reads as a chunky flat-color
+   toy puck rather than a glossy photo. Sized off its own width, not
+   height, so it stays a perfect circle no matter how tall its grid row is. */
+.kid-tile-art {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-width: 190px;
+  border-radius: 50%;
+  background-color: var(--tile-color);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  box-shadow: 0 6px 0 rgba(35, 25, 65, 0.14), 0 10px 18px rgba(35, 25, 65, 0.14);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.kid-tile:active .kid-tile-art {
+  /* Presses down into its own shadow, like a physical toy button. */
+  transform: translateY(4px) scale(0.97);
+  box-shadow: 0 2px 0 rgba(35, 25, 65, 0.14), 0 4px 10px rgba(35, 25, 65, 0.12);
+}
+.kid-tile.is-locked-shake {
+  /* "No" feedback for a tile refused by song-lock mode — a shake reads as
+     "not that one" without needing any text on the tile itself. */
+  animation: tile-shake 0.4s ease-in-out;
+}
+@keyframes tile-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+/* Holds the 1 (or, for an override, up to 2) emoji glyphs that make up a
+   tile's icon, centered as a unit regardless of count. */
+.kid-tile-emoji-group {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+}
+.kid-tile-emoji {
+  font-size: min(14vw, 5.5rem);
+  line-height: 1;
+}
+/* An override can hold 2 emoji sharing one circle — shrink the pair so
+   both sit side by side instead of crowding past the tile's edge. */
+.kid-tile-art .kid-tile-emoji-group--pair .kid-tile-emoji {
+  font-size: min(9vw, 3.4rem);
+}
+.kid-tile-emoji-fallback {
+  /* Dimmed relative to a real emoji override or simple-mode icon, so it
+     reads as "no art available for this one" rather than a deliberate
+     choice a parent made. */
+  opacity: 0.55;
+}
+/* The name, below the circle rather than overlaid on it — plain text reads
+   clearly against the page's own light gradient backdrop, so it no longer
+   needs the translucent pill background it used when it sat on top of busy
+   album art or color. One line plus an ellipsis keeps every card the same
+   tidy shape regardless of how long a song's title runs. */
+.kid-tile-label {
+  font-family: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1.2;
+  color: #3d3358;
+  text-align: center;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kid-tile-eq {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  gap: 4px;
+  align-items: flex-end;
+  height: 28px;
+  padding: 5px 7px;
+  /* Opaque white (rather than the old translucent dark chip) so the badge
+     itself — not just the ring around the tile — reads clearly against
+     every pastel fill and every piece of album art alike. Centered on the
+     circle's own bottom edge rather than tucked into a corner, which on a
+     round shape would hang half off the card. */
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.kid-tile.is-playing .kid-tile-art {
+  animation: tile-bounce 1s ease-in-out infinite, tile-pulse-glow 1.6s ease-in-out infinite;
+}
+.kid-tile.is-playing .kid-tile-eq {
+  display: flex;
+}
+.kid-tile-eq i {
+  width: 5px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #ff6b6b, #ffd166, #06d6a0);
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+.kid-tile-eq i:nth-child(1) {
+  height: 9px;
+  animation-delay: 0s;
+}
+.kid-tile-eq i:nth-child(2) {
+  height: 20px;
+  animation-delay: 0.2s;
+}
+.kid-tile-eq i:nth-child(3) {
+  height: 14px;
+  animation-delay: 0.4s;
+}
+
+@keyframes tile-bounce {
+  0%,
+  100% {
+    transform: scale(1) translateY(0);
+  }
+  50% {
+    transform: scale(1.035) translateY(-4px);
+  }
+}
+/* A bright white ring plus a warm pulsing glow (rather than a static,
+   matching-color halo) so the active tile pops against every pastel fill
+   the same way, and draws the eye rather than sitting there quietly. */
+@keyframes tile-pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 6px 0 rgba(35, 25, 65, 0.14), 0 12px 22px rgba(35, 25, 65, 0.22), 0 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px 2px rgba(255, 209, 102, 0.5);
+  }
+  50% {
+    box-shadow: 0 6px 0 rgba(35, 25, 65, 0.14), 0 12px 22px rgba(35, 25, 65, 0.22), 0 0 0 6px rgba(255, 255, 255, 0.95), 0 0 28px 6px rgba(255, 209, 102, 0.85);
+  }
+}
+@keyframes eq-bounce {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.sparkle-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: hidden;
+}
+.sparkle {
+  position: absolute;
+  font-size: 1.6rem;
+  transform: translate(-50%, -50%);
+  animation: sparkle-burst 0.7s ease-out forwards;
+}
+@keyframes sparkle-burst {
+  0% {
+    transform: translate(-50%, -50%) scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1);
+    opacity: 0;
+  }
+}
+
+.kid-error {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: linear-gradient(160deg, #fff3e0 0%, #ffe1ec 45%, #dcf2ff 100%);
+}
+.cloud-illustration {
+  width: 220px;
+  height: auto;
+  animation: cloud-bob 3s ease-in-out infinite;
+}
+@keyframes cloud-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+.kid-error-detail {
+  color: #9a8fc2;
+  font-size: 0.7rem;
+  max-width: 80%;
+  text-align: center;
+}
+
+.parent-gate-btn {
+  /* Top corner, not bottom: the now-playing overlay spans the bottom edge
+     while a song is active, and would otherwise sit on top of this button
+     and make parent mode unreachable while anything is playing.
+     Deliberately visible-but-plain rather than colorful: a parent needs
+     to be able to find it on a light background, but it shouldn't read as
+     an inviting button to a toddler the way the bright tiles do. */
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(107, 91, 149, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(90, 60, 130, 0.2);
+  padding: 4px;
+  overflow: hidden;
+  z-index: 5;
+}
+.parent-gate-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #b892ff;
+  transform: scale(0);
+  transform-origin: center;
+  transition: transform 3s linear;
+}
+.parent-gate-btn.is-holding .parent-gate-fill {
+  transform: scale(1);
+}
+
+.now-playing-overlay {
+  position: absolute;
+  /* env(safe-area-inset-*) keeps this floating clear of a notch/home
+     indicator on the sides too, not just the bottom (matters in landscape). */
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  right: calc(env(safe-area-inset-right, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  z-index: 2;
+  background: #fff;
+  border-radius: 28px;
+  box-shadow: 0 14px 32px rgba(90, 60, 130, 0.28);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: overlay-in 0.25s ease-out;
+}
+@keyframes overlay-in {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.np-title {
+  /* The bar previously showed only a thumbnail with no text anywhere —
+     fine for a kid recognizing songs by picture, but gives a parent (or a
+     simple-mode reader) no way to confirm which song is on without
+     opening parent mode. */
+  font-family: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #3d3358;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+.np-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.np-back {
+  /* A plain "‹" here used to just hide this bar while the song kept
+     playing silently out of view — easy to read as broken, since tapping
+     it didn't seem to do anything. It now also pauses (see kid-mode.js),
+     so it's styled and iconed like the other real media controls in this
+     row instead of a quiet, easy-to-miss chevron. */
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #ff6b81;
+  color: #fff;
+  font-size: 1.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(255, 107, 129, 0.45);
+}
+.np-art {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background-size: cover;
+  background-position: center;
+  background-color: #f1ecff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.np-emoji {
+  font-size: 1.8rem;
+}
+.np-art .kid-tile-emoji-group--pair .np-emoji {
+  font-size: 1.1rem;
+}
+.np-progress {
+  flex: 1;
+  height: 8px;
+  background: #e4daff;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.np-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #ff6b6b, #ffd166, #06d6a0);
+}
+.np-play-pause {
+  font-size: 1.6rem;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: #5b8def;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 6px 14px rgba(91, 141, 239, 0.4);
+}
+
+.np-viz-toggle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #efe9fb;
+  color: #6b5b95;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.np-viz-toggle.is-active {
+  background: #2a1f45;
+  box-shadow: 0 0 0 3px rgba(184, 146, 255, 0.45);
+}
+.np-viz-toggle.is-winamp {
+  /* Same active treatment, but a hot vivid gradient instead of flat dark
+     purple — a visibly different "turned up" state for the second tap in
+     the off -> subtle -> winamp cycle, not just the same icon glowing
+     slightly differently. */
+  background: linear-gradient(135deg, #ff1744, #ff9100, #00e676);
+  box-shadow: 0 0 0 3px rgba(255, 145, 0, 0.55);
+}
+/* A distinct icon for the "turned up" state, not just the same eq bars in
+   a different color — swapped in by .is-winamp below. */
+.viz-toggle-winamp-icon {
+  display: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  animation: winamp-icon-spin 3s linear infinite;
+}
+.np-viz-toggle.is-winamp .viz-toggle-icon {
+  display: none;
+}
+.np-viz-toggle.is-winamp .viz-toggle-winamp-icon {
+  display: block;
+}
+@keyframes winamp-icon-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.viz-toggle-icon {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 18px;
+}
+.viz-toggle-icon i {
+  width: 4px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.55;
+}
+.viz-toggle-icon i:nth-child(1) {
+  height: 7px;
+}
+.viz-toggle-icon i:nth-child(2) {
+  height: 16px;
+}
+.viz-toggle-icon i:nth-child(3) {
+  height: 11px;
+}
+.np-viz-toggle.is-active .viz-toggle-icon i {
+  opacity: 1;
+  background: #ffe135;
+  animation: eq-bounce 0.9s ease-in-out infinite;
+}
+.np-viz-toggle.is-active .viz-toggle-icon i:nth-child(1) {
+  animation-delay: 0s;
+}
+.np-viz-toggle.is-active .viz-toggle-icon i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.np-viz-toggle.is-active .viz-toggle-icon i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.np-visualizer {
+  display: block;
+  width: 100%;
+  height: 56px;
+  border-radius: 14px;
+  background: #0c0716;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08), inset 0 3px 10px rgba(0, 0, 0, 0.5);
+  transform-origin: top;
+  animation: viz-in 0.2s ease-out;
+}
+@keyframes viz-in {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* ---------- Parent gate ---------- */
+#parent-gate-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.parent-gate-card {
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 28px;
+  text-align: center;
+  width: min(320px, 90vw);
+}
+
+/* ---------- App modal (replaces window.confirm/alert/prompt) ---------- */
+.app-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(10, 6, 16, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: app-modal-fade-in 0.15s ease-out;
+}
+@keyframes app-modal-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.app-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 24px;
+  width: min(360px, 100%);
+  text-align: left;
+  animation: app-modal-pop-in 0.15s ease-out;
+}
+@keyframes app-modal-pop-in {
+  from {
+    transform: scale(0.95) translateY(6px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+#app-modal-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+#app-modal-message {
+  margin: 0 0 4px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.app-modal-input {
+  margin-top: 12px;
+}
+.app-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+.danger-btn {
+  background: var(--danger) !important;
+}
+.pin-input {
+  font-size: 2rem;
+  letter-spacing: 0.5em;
+  text-align: center;
+  width: 100%;
+  padding: 12px;
+  margin: 16px 0;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.parent-gate-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* ---------- Parent mode ---------- */
+#parent-mode-view {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+  -webkit-user-select: auto;
+  user-select: auto;
+}
+.parent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.parent-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.parent-section h2 {
+  margin-top: 0;
+  font-size: 1.05rem;
+}
+.quick-setup-section {
+  border: 1px solid var(--accent);
+  background: linear-gradient(160deg, rgba(91, 141, 239, 0.12), rgba(184, 146, 255, 0.12));
+}
+.quick-setup-section .big-btn {
+  width: 100%;
+}
+.quick-playlist-open-row {
+  margin-top: 8px;
+}
+.quick-playlist-open-row a {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.kid-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.kid-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+.kid-tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.kid-tab-remove {
+  opacity: 0.7;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 2px;
+}
+.kid-tab-remove:hover {
+  opacity: 1;
+}
+.kid-tab-warning {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.text-input {
+  width: 100%;
+  font-size: 1rem;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.tile-remove-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  font-size: 0.9rem;
+}
+.tile-remove-status span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tile-remove-status button {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.tile-remove-status button:hover {
+  text-decoration: underline;
+}
+
+.tile-list,
+.result-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tile-row,
+.result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border-radius: 12px;
+  padding: 8px;
+  touch-action: pan-y;
+}
+.tile-row.dragging {
+  opacity: 0.85;
+  z-index: 5;
+  position: relative;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+.drag-handle {
+  cursor: grab;
+  padding: 6px;
+  color: var(--muted);
+  touch-action: none;
+  font-size: 1.2rem;
+}
+.tile-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--surface);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+}
+.tile-meta {
+  flex: 1;
+  min-width: 0;
+}
+.tile-title {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-artist {
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.explicit-badge {
+  /* A solid danger-colored fill instead of an outline that matched the
+     surrounding surface color — the outline read as barely-there against
+     the same dark background every other tile-row chrome uses, which
+     defeats the point of a caution marker a parent should catch at a glance. */
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: var(--danger);
+  color: #2a0810;
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
+.explicit-hidden-note {
+  margin-top: 6px;
+  font-size: 0.85rem;
+}
+.tile-action-btn {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.tile-remove-btn {
+  color: var(--danger);
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.tab-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.settings-field {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+.settings-field input[type='range'],
+.settings-field select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+fieldset.settings-field {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+}
+fieldset.settings-field label {
+  display: block;
+  color: var(--text);
+  padding: 4px 0;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Bottom actions: Save is the one primary, frequent action here, so it
+   stands alone at full width; Export/Import/Copy-link are rare backup-and-
+   sharing actions grouped and labeled under their own divider so they read
+   as a distinct, lower-priority cluster instead of five equal-weight
+   buttons in one row with no indication of what any of them are for. */
+.bottom-actions-section .full-width-btn {
+  width: 100%;
+}
+.save-status {
+  min-height: 1.2em;
+  margin-top: 8px;
+  text-align: center;
+}
+.backup-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.action-group-label {
+  margin: 0 0 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.done-btn-bottom {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+}
+
+/* Portrait: swap the grid's column/row emphasis so wide layouts fit a
+   narrow-tall screen (JS sets --cols/--rows accordingly). */
+@media (orientation: portrait) {
+  .kid-grid {
+    height: 100%;
+  }
+}
+
+/* ---------- Hidden YouTube IFrame player (youtube-player.js) ----------
+   Deliberately NOT display:none or visibility:hidden — both tell a
+   browser this element isn't going to be seen, and some browsers respond
+   by throttling or fully suspending video decode/playback on it. opacity
+   keeps the iframe "on screen" from the rendering engine's point of view
+   (still painted, just fully transparent), so playback keeps running
+   normally; the 1x1 size, fixed off-screen position, and pointer-events:
+   none are what actually make it invisible and untappable. This class is
+   applied automatically by youtube-player.js's own createHiddenContainer()
+   (with the same properties set inline too, so it stays hidden even on a
+   page that hasn't loaded this stylesheet) — nothing else needs to
+   reference it directly. */
+.yt-hidden-player {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+.yt-hidden-player iframe {
+  width: 1px;
+  height: 1px;
+}
+
+/* "Playing an advertisement" notice — reflects youtube-player.js's
+   best-effort ad-duration heuristic (state.isLikelyAd; see that file's
+   own comments for how it works and why it's a guess, never a
+   certainty). Follows this codebase's existing [hidden] convention: add
+   an element with this class next to .np-title and toggle its `hidden`
+   attribute from an onStateChange listener, the way youtube-player-
+   demo.js does. Not wired into kid-mode.js's real now-playing bar yet —
+   that's a one-line addition for whenever the rest of the Data & Search
+   Substitution step lands. */
+.np-ad-notice {
+  font-family: 'Baloo 2', ui-rounded, 'Segoe UI', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--accent, #7c5ce0);
+  text-align: center;
+  padding: 0 4px;
+}

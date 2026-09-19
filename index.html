@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Kids Music Tiles</title>
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#FFE8D6" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icon.svg" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!--
+      Shown instead of the app when this page is opened as a local file
+      (file://), which the module script below can't detect itself —
+      Chromium refuses to even load an external `type="module"` script
+      over file://, so app.js never runs and the whole page would
+      otherwise stay blank with no explanation. This has to be a plain,
+      non-module script so it still runs in that case.
+    -->
+    <div id="file-protocol-notice" hidden>
+      <div class="login-card">
+        <h1>Kids Music Tiles</h1>
+        <p>
+          This page was opened directly from a file (the address bar
+          starts with <code>file://</code>), so it can't run — Spotify
+          login, and the rest of the app, need to be loaded from a real
+          web address.
+        </p>
+        <p class="muted">
+          Open the deployed site instead, or serve this folder with a
+          local static server (for example <code>python3 -m
+          http.server</code>) and open the
+          <code>http://127.0.0.1:&lt;port&gt;/</code> address it prints.
+        </p>
+      </div>
+    </div>
+
+    <main id="app">
+      <!-- Logged out -->
+      <section id="login-view" class="view" hidden>
+        <div class="login-card">
+          <h1>Kids Music Tiles</h1>
+          <button id="login-btn" class="big-btn">Log in with Spotify</button>
+          <div id="login-error" class="warning" hidden></div>
+          <div id="redirect-uri-warning" class="warning" hidden></div>
+          <details id="redirect-uri-help" class="redirect-uri-help">
+            <summary>Trouble logging in?</summary>
+            <p class="muted">
+              Spotify checks this app's Redirect URI exactly. If "Log in with
+              Spotify" lands on a Spotify error page instead of the sign-in
+              form, add the address below as a Redirect URI for this app at
+              the <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">Spotify Developer Dashboard</a>
+              (Redirect URIs → Add → then <strong>Save</strong> — easy to
+              miss), then try again.
+            </p>
+            <div class="redirect-uri-row">
+              <code id="redirect-uri-value"></code>
+              <button type="button" id="copy-redirect-uri-btn" class="small-btn">Copy</button>
+            </div>
+            <p id="redirect-uri-status" class="muted" aria-live="polite"></p>
+          </details>
+        </div>
+      </section>
+
+      <!-- Kid mode -->
+      <section id="kid-mode" class="view" hidden>
+        <canvas id="kid-bg-visualizer" class="kid-bg-visualizer" aria-hidden="true" hidden></canvas>
+
+        <div id="kid-greeting" class="kid-greeting" hidden></div>
+        <div id="kid-lock-toast" class="kid-lock-toast" hidden>🎵 Let’s finish this song first!</div>
+
+        <div id="kid-grid" class="kid-grid"></div>
+
+        <div id="sparkle-layer" class="sparkle-layer" aria-hidden="true"></div>
+
+        <div id="kid-error" class="kid-error" hidden>
+          <svg viewBox="0 0 200 140" class="cloud-illustration" aria-hidden="true">
+            <ellipse cx="100" cy="80" rx="70" ry="40" fill="#EAE0FF" />
+            <circle cx="55" cy="65" r="30" fill="#EAE0FF" />
+            <circle cx="130" cy="60" r="35" fill="#EAE0FF" />
+            <circle cx="95" cy="55" r="4" fill="#8A7FB8" />
+            <path d="M85 55 q5 -6 10 0" stroke="#8A7FB8" stroke-width="3" fill="none" stroke-linecap="round" />
+            <circle cx="125" cy="55" r="4" fill="#8A7FB8" />
+            <path d="M115 55 q5 -6 10 0" stroke="#8A7FB8" stroke-width="3" fill="none" stroke-linecap="round" />
+            <path d="M92 68 q8 8 16 0" stroke="#8A7FB8" stroke-width="3" fill="none" stroke-linecap="round" />
+            <text x="148" y="34" font-size="20" fill="#B8ACDE" font-family="'Baloo 2', sans-serif">z</text>
+            <text x="163" y="20" font-size="15" fill="#B8ACDE" font-family="'Baloo 2', sans-serif">z</text>
+          </svg>
+          <div id="kid-error-detail" class="kid-error-detail"></div>
+        </div>
+
+        <button id="parent-gate-btn" class="parent-gate-btn" aria-label="Parent settings">
+          <span class="parent-gate-fill"></span>
+        </button>
+
+        <div id="now-playing-overlay" class="now-playing-overlay" hidden>
+          <div id="np-title" class="np-title"></div>
+          <div class="np-row">
+            <button id="back-to-tiles-btn" class="np-back" aria-label="Pause and go back to tiles">&#9209;</button>
+            <div id="np-art" class="np-art"></div>
+            <div class="np-progress"><div id="np-progress-bar" class="np-progress-bar"></div></div>
+            <button id="np-play-pause" class="np-play-pause" aria-label="Play or pause">&#9208;</button>
+            <button id="np-viz-toggle" class="np-viz-toggle" aria-label="Toggle music visualizer" aria-pressed="false">
+              <span class="viz-toggle-icon"><i></i><i></i><i></i></span>
+              <span class="viz-toggle-winamp-icon" aria-hidden="true">🪩</span>
+            </button>
+          </div>
+          <canvas id="np-visualizer" class="np-visualizer" aria-hidden="true" hidden></canvas>
+        </div>
+      </section>
+
+      <!-- Parent gate challenge -->
+      <section id="parent-gate-view" class="view" hidden>
+        <form id="parent-gate-form" class="parent-gate-card">
+          <h2 id="parent-gate-title">Enter parent PIN</h2>
+          <p id="parent-gate-message" class="muted"></p>
+          <input id="parent-gate-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" class="pin-input" />
+          <div id="parent-gate-error" class="warning" hidden></div>
+          <div class="parent-gate-actions">
+            <button type="button" id="parent-gate-cancel-btn" class="small-btn">Back to tiles</button>
+            <button type="submit" class="big-btn">Continue</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Parent mode -->
+      <section id="parent-mode-view" class="view" hidden>
+        <header class="parent-header">
+          <h1>Parent Mode</h1>
+          <button id="parent-done-btn" class="small-btn">Done</button>
+        </header>
+
+        <section class="parent-section kids-section">
+          <h2>Kids</h2>
+          <div id="kid-tabs" class="kid-tabs"></div>
+          <button type="button" id="add-kid-btn" class="small-btn">+ Add another kid</button>
+        </section>
+
+        <section class="parent-section quick-setup-section">
+          <h2>Quick setup</h2>
+          <label class="settings-field">
+            Kid's name (optional)
+            <input id="kid-name-input" type="text" class="text-input" placeholder="e.g. Emma" maxlength="40" />
+          </label>
+          <label class="settings-field">
+            Playlist link
+            <input id="quick-playlist-input" type="text" class="text-input" placeholder="Paste a Spotify playlist link you own or collaborate on" />
+          </label>
+          <button id="quick-playlist-btn" class="big-btn">Load playlist as tiles</button>
+          <div id="quick-playlist-status" class="muted"></div>
+          <div id="quick-playlist-error" class="warning" hidden></div>
+          <div id="quick-playlist-open-row" class="quick-playlist-open-row" hidden>
+            <a id="quick-playlist-open-link" href="#" target="_blank" rel="noopener" class="small-btn">Open playlist in Spotify ↗</a>
+          </div>
+        </section>
+
+        <section class="parent-section">
+          <h2>Account</h2>
+          <div id="account-info"></div>
+          <div id="token-warning" class="warning" hidden></div>
+          <div id="scope-warning" class="warning" hidden></div>
+          <details id="scope-details" class="scope-details" hidden>
+            <summary>Technical details</summary>
+            <div id="scope-info" class="muted"></div>
+          </details>
+          <div class="row-actions">
+            <button id="logout-btn" class="small-btn">Log out</button>
+            <button id="relogin-btn" class="small-btn">Log in again</button>
+          </div>
+        </section>
+
+        <section class="parent-section">
+          <h2>Songs (<span id="tile-count">0</span>)</h2>
+          <div id="tile-count-warning" class="warning" hidden></div>
+          <div id="tile-remove-status" class="tile-remove-status" role="status" aria-live="polite" hidden></div>
+          <ul id="tile-list" class="tile-list"></ul>
+        </section>
+
+        <section class="parent-section">
+          <h2>Add songs</h2>
+          <div class="tabs">
+            <button type="button" id="tab-search" class="tab-btn active">Search</button>
+            <button type="button" id="tab-playlist" class="tab-btn">From playlist</button>
+          </div>
+          <div id="search-panel">
+            <input id="search-input" type="search" placeholder="Search for a song" class="text-input" />
+            <div id="search-results" class="result-list"></div>
+            <button id="search-load-more" class="small-btn" hidden>Load more</button>
+          </div>
+          <div id="playlist-panel" hidden>
+            <input id="playlist-input" type="text" placeholder="Paste a Spotify playlist link" class="text-input" />
+            <button id="playlist-fetch-btn" class="small-btn">Fetch songs</button>
+            <div id="playlist-error" class="warning" hidden></div>
+            <button id="playlist-add-all-btn" class="small-btn" hidden>Add all</button>
+            <div id="playlist-results" class="result-list"></div>
+          </div>
+        </section>
+
+        <section class="parent-section">
+          <h2>Settings</h2>
+          <fieldset class="settings-field">
+            <legend>Tile style</legend>
+            <label><input type="radio" name="tile-display" value="cover" /> Cover art</label>
+            <label><input type="radio" name="tile-display" value="simple" /> Simple (emoji + song name)</label>
+          </fieldset>
+          <fieldset class="settings-field">
+            <legend>When a song ends</legend>
+            <label><input type="radio" name="end-of-song" value="stop" /> Stop</label>
+            <label><input type="radio" name="end-of-song" value="repeat" /> Repeat this song</label>
+            <label><input type="radio" name="end-of-song" value="continue" /> Continue to next tile</label>
+          </fieldset>
+          <fieldset class="settings-field">
+            <legend>Background visualizer</legend>
+            <label><input type="radio" name="visualizer-mode" value="off" /> Off</label>
+            <label><input type="radio" name="visualizer-mode" value="subtle" /> Subtle glow</label>
+            <label><input type="radio" name="visualizer-mode" value="winamp" /> Winamp mode (bright &amp; bold)</label>
+          </fieldset>
+          <label class="settings-field">
+            Max volume (<span id="volume-value">100</span>%)
+            <input id="volume-slider" type="range" min="0" max="100" value="100" />
+          </label>
+          <label class="settings-field">
+            Sleep timer
+            <select id="sleep-timer-select">
+              <option value="">Off</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="45">45 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </label>
+          <label class="settings-field settings-checkbox">
+            <input id="hide-explicit-toggle" type="checkbox" />
+            Hide explicit tracks
+          </label>
+          <label class="settings-field settings-checkbox">
+            <input id="song-lock-toggle" type="checkbox" />
+            Lock each song for 1 minute (no skipping to another tile right away)
+          </label>
+          <button id="change-pin-btn" class="small-btn">Change PIN</button>
+        </section>
+
+        <section class="parent-section bottom-actions-section">
+          <button id="save-btn" class="big-btn full-width-btn">Save</button>
+          <div id="save-status" class="muted save-status" aria-live="polite"></div>
+
+          <div class="backup-actions">
+            <h3 class="action-group-label">Back up &amp; share this setup</h3>
+            <div class="row-actions">
+              <button id="export-btn" class="small-btn">Export</button>
+              <button id="import-btn" class="small-btn">Import</button>
+              <button id="copy-link-btn" class="small-btn">Copy setup link</button>
+            </div>
+          </div>
+
+          <button id="parent-done-btn-bottom" class="small-btn done-btn-bottom">Done</button>
+
+          <input id="import-file-input" type="file" accept="application/json" hidden />
+          <input id="color-picker-input" type="color" hidden />
+        </section>
+      </section>
+
+      <!--
+        Replaces window.confirm/alert/prompt everywhere in the app: those
+        render as unstyled native browser chrome, which clashes hard with
+        an otherwise fully custom UI in both kid and parent mode. Sits
+        outside every .view on purpose so it works no matter which one is
+        currently showing. See dialog.js.
+      -->
+      <div id="app-modal-backdrop" class="app-modal-backdrop" hidden>
+        <div id="app-modal" class="app-modal" role="alertdialog" aria-modal="true" aria-labelledby="app-modal-title">
+          <h3 id="app-modal-title"></h3>
+          <p id="app-modal-message"></p>
+          <input id="app-modal-input" class="text-input app-modal-input" hidden />
+          <div class="app-modal-actions">
+            <button type="button" id="app-modal-cancel-btn" class="small-btn"></button>
+            <button type="button" id="app-modal-confirm-btn" class="big-btn"></button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      if (location.protocol === 'file:') {
+        document.getElementById('file-protocol-notice').hidden = false;
+        document.getElementById('app').hidden = true;
+      }
+    </script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

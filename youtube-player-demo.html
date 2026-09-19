@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hidden YouTube Player — Engine Demo</title>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      /* Demo-page chrome only — not part of the reusable app UI, so it
+         stays out of style.css. Everything below (.now-playing-overlay,
+         .np-*, .text-input, .small-btn, .warning, .settings-field) is a
+         real class from the actual kids' app, reused as-is to prove the
+         engine drives the real UI look, not a lookalike. */
+      body {
+        display: flex;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 32px 16px;
+      }
+      .demo-shell {
+        max-width: 440px;
+        width: 100%;
+      }
+      .demo-shell h1 {
+        font-family: 'Baloo 2', ui-rounded, sans-serif;
+        font-size: 1.4rem;
+        margin-bottom: 4px;
+      }
+      .demo-input-row {
+        display: flex;
+        gap: 8px;
+        margin: 16px 0 6px;
+        align-items: flex-start;
+      }
+      .demo-input-row textarea {
+        flex: 1;
+        min-height: 64px;
+        resize: vertical;
+      }
+      .demo-log {
+        margin-top: 18px;
+        background: var(--surface);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 0.76rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        max-height: 180px;
+        overflow-y: auto;
+        color: var(--muted);
+      }
+      .demo-log div {
+        margin-bottom: 2px;
+      }
+      .now-playing-overlay.demo-static {
+        position: static;
+        margin-top: 18px;
+        color: #3d3358;
+      }
+      .demo-volume-row {
+        margin-top: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="demo-shell">
+      <h1>🎵 Hidden YouTube Player — Engine Demo</h1>
+      <p class="muted">
+        Exercises <code>youtube-player.js</code> directly and standalone — the same module the
+        real app will use once the search/data step replaces Spotify — independent of the
+        (still Spotify-based) tile grid. One YouTube link or bare video ID per line; the first
+        line plays first, and ⏮/⏭ move between the rest, the same way kid-mode.js queues a
+        kid's whole tile grid at once.
+      </p>
+
+      <div class="demo-input-row">
+        <textarea id="demo-video-input" class="text-input" rows="3"></textarea>
+        <button id="demo-load-btn" class="small-btn">Load queue<br />&amp; play</button>
+      </div>
+      <div id="demo-error" class="warning" hidden></div>
+      <div id="demo-ready" class="muted">Loading the YouTube IFrame API…</div>
+
+      <div id="now-playing-overlay" class="now-playing-overlay demo-static">
+        <div id="np-title" class="np-title">Nothing loaded yet</div>
+        <div id="np-ad-notice" class="np-ad-notice" hidden>🔊 Playing an advertisement…</div>
+        <div class="np-row">
+          <button id="np-previous" class="np-back" aria-label="Previous">⏮</button>
+          <div id="np-art" class="np-art"></div>
+          <div class="np-progress"><div id="np-progress-bar" class="np-progress-bar"></div></div>
+          <button id="np-play-pause" class="np-play-pause" aria-label="Play or pause">▶</button>
+          <button id="np-next" class="np-back" aria-label="Next">⏭</button>
+        </div>
+        <label class="settings-field demo-volume-row">
+          Volume (<span id="demo-volume-value">100</span>%)
+          <input id="demo-volume-slider" type="range" min="0" max="100" value="100" />
+        </label>
+      </div>
+
+      <div id="demo-log" class="demo-log"></div>
+    </div>
+
+    <script type="module" src="youtube-player-demo.js"></script>
+  </body>
+</html>
