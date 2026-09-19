@@ -112,6 +112,11 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
     eq.className = 'kid-tile-eq';
     eq.innerHTML = '<i></i><i></i><i></i>';
     art.appendChild(eq);
+
+    const pauseIcon = document.createElement('span');
+    pauseIcon.className = 'kid-tile-pause';
+    art.appendChild(pauseIcon);
+
     btn.appendChild(art);
 
     if (displayMode === 'simple') {
@@ -154,7 +159,20 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
         closeNowPlaying();
       } else {
         activeTileIndex = idx;
-        if (!els.overlay.hidden) renderNowPlayingArt();
+        // Keeps the bar's own visibility in sync with the current display
+        // mode on every render, not only when playback first starts —
+        // otherwise switching modes in Settings while a song is already
+        // playing in the background can leave a bar open that simple mode
+        // should have dropped, or leave cover mode's bar hidden until the
+        // next tap happens to reopen it.
+        const shouldShowBar = displayMode !== 'simple';
+        if (shouldShowBar === !els.overlay.hidden) {
+          if (shouldShowBar) renderNowPlayingArt();
+        } else {
+          els.overlay.hidden = !shouldShowBar;
+          if (shouldShowBar) renderNowPlayingArt();
+          refreshVisualizers();
+        }
       }
     }
 
@@ -167,6 +185,23 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
     const name = getConfig().settings.kidName && getConfig().settings.kidName.trim();
     els.greeting.hidden = !name;
     if (name) els.greeting.textContent = `🎵 ${name}’s Music`;
+    updateGreetingClearance();
+  }
+
+  // The "<Name>'s Music" pill floats *over* the grid the same way the
+  // now-playing bar does (position:absolute, so it reserves no layout
+  // space of its own) — without this, a short tile count centers the grid
+  // vertically enough that its top row can render straight underneath the
+  // pill instead of below it. Padding the grid by exactly the pill's own
+  // rendered height keeps the top row clear of it, the same way
+  // updateGridClearance() already does for the bottom bar.
+  function updateGreetingClearance() {
+    if (!els.greeting || els.greeting.hidden) {
+      els.grid.style.removeProperty('--greeting-clearance');
+      return;
+    }
+    const rect = els.greeting.getBoundingClientRect();
+    els.grid.style.setProperty('--greeting-clearance', `${Math.max(0, rect.bottom) + 12}px`);
   }
 
   function spawnSparkles(originBtn) {
@@ -198,7 +233,9 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
 
   function updateActiveTileVisual() {
     Array.from(els.grid.children).forEach((btn, i) => {
-      btn.classList.toggle('is-playing', i === activeTileIndex);
+      const active = i === activeTileIndex;
+      btn.classList.toggle('is-playing', active && !lastState.paused);
+      btn.classList.toggle('is-paused', active && lastState.paused);
     });
     els.grid.classList.toggle('has-active-tile', activeTileIndex !== -1);
   }
@@ -227,6 +264,11 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
   function markTilePlaying(index) {
     activeTileIndex = index;
     activeTrackUri = getConfig().tiles[index] ? getConfig().tiles[index].uri : null;
+    // Optimistic: a play request just succeeded, so treat it as playing
+    // immediately rather than showing whatever lastState.paused was left
+    // over from before — the real onStateChange event confirms (or
+    // corrects) this shortly after.
+    lastState = { ...lastState, paused: false };
     if (getConfig().settings.songLockEnabled && activeTrackUri) {
       songLockedUntil = Date.now() + SONG_LOCK_MS;
       songLockedUri = activeTrackUri;
@@ -273,6 +315,23 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
     const now = Date.now();
     if (now - (lastTapAt.get(tile.id) || 0) < TAP_DEBOUNCE_MS) return;
     lastTapAt.set(tile.id, now);
+
+    // Simple mode has no now-playing bar, so re-tapping the tile that's
+    // already active *is* the play/pause/resume control: tap to start,
+    // tap again to pause, tap again to continue — rather than always
+    // restarting the same track from 0 the way cover mode still does.
+    // lastState.paused is flipped optimistically (the SDK round-trip can
+    // take a couple of seconds per the Phase 0 spike notes) so the tile's
+    // glow/badge respond to the tap immediately; the real onStateChange
+    // event reconciles it shortly after either way.
+    if (config.settings.tileDisplay === 'simple' && index === activeTileIndex && activeTrackUri === tile.uri) {
+      const wasPaused = lastState.paused;
+      lastState = { ...lastState, paused: !wasPaused };
+      updateActiveTileVisual();
+      (wasPaused ? player.resume() : player.pause()).catch((e) => showError(e));
+      return;
+    }
+
     spawnSparkles(btn);
     pendingFullQueuePlay = null;
 
@@ -377,8 +436,15 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
   }
 
   function openNowPlaying() {
-    els.overlay.hidden = false;
-    renderNowPlayingArt();
+    // Simple mode drops the now-playing bar entirely — tapping the tile
+    // itself is the whole play/pause/resume control there (see
+    // handleTap), so nothing needs a place to show. Everything else here
+    // (progress tracking, the sleep timer, the ambient backdrop
+    // visualizer) is independent of the bar and keeps running regardless.
+    if (getConfig().settings.tileDisplay !== 'simple') {
+      els.overlay.hidden = false;
+      renderNowPlayingArt();
+    }
     startProgressTicker();
     armSleepTimer();
     refreshVisualizers();
@@ -535,10 +601,18 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
       if (newIndex !== -1 && newIndex !== activeTileIndex) {
         activeTileIndex = newIndex;
         activeTrackUri = track.uri;
-        updateActiveTileVisual();
         renderNowPlayingArt();
       }
     }
+    // Reconciles the optimistic lastState.paused flips in handleTap and
+    // markTilePlaying with whatever the SDK actually reports, and — since
+    // simple mode has no separate play/pause button — this is also what
+    // drives a tile's playing-vs-paused look when the *bar's* button was
+    // what changed it (cover mode) rather than a tap on the tile itself.
+    // Safe against the stale-report race described above: this only ever
+    // re-reads whatever activeTileIndex already is, never sets it, so it
+    // can't resurrect a tile an explicit stop already cleared.
+    updateActiveTileVisual();
   });
 
   player.onEvent(({ type }) => {

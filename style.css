@@ -280,32 +280,43 @@ h2 {
      justify/align-content) rather than between tiles. The 64px floor still
      keeps tiles tappable if the count grows large enough to shrink them;
      past that floor the grid overflows its own scroll area rather than
-     shrinking tiles below tap size. Rows get a taller cap than columns —
-     each card is now a circle plus its name below, not a single square
-     filling the whole cell, so a row needs more height than its column
-     has width, or the name would get squeezed. */
+     shrinking tiles below tap size.
+
+     Rows are `auto` (content-sized), not a matching minmax(), on purpose:
+     each card's circle is sized off its own *width* (the column track),
+     so a fixed row-height guess could resolve shorter than that width on
+     a narrow phone with few columns — especially once the now-playing
+     bar's bottom padding eats into the available height — and a circle
+     squeezed shorter than it is wide renders as an oval. Auto rows instead
+     grow to fit whatever the (always-square) card actually needs, so the
+     circle is never distorted; if that doesn't fit the viewport, the grid
+     scrolls (overflow-y below) rather than warping a tile's shape. */
   grid-template-columns: repeat(var(--cols), minmax(64px, 190px));
-  grid-template-rows: repeat(var(--rows), minmax(88px, 236px));
+  grid-template-rows: repeat(var(--rows), auto);
   justify-content: center;
   align-content: center;
   gap: 18px;
   height: 100%;
   padding: 20px;
-  /* Extra bottom clearance while the now-playing bar floats over the grid,
-     set by kid-mode.js's updateGridClearance() to that bar's own current
-     height — otherwise its last row of tiles has no way to scroll clear
-     of the bar (see .now-playing-overlay, which floats rather than
-     participating in this layout at all). Defaults to 0 so this is a
-     no-op whenever nothing is playing. */
+  /* Extra top/bottom clearance for the two floating overlays that sit on
+     top of the grid without reserving any layout space of their own
+     (both position:absolute) — the "<Name>'s Music" greeting pill and the
+     now-playing bar. Set by kid-mode.js's updateGreetingClearance() and
+     updateGridClearance() to each one's own current size; without this,
+     a short tile count can center the grid's rows enough that the top
+     row renders straight under the greeting pill, and the bottom row has
+     no way to scroll clear of the now-playing bar. Both default to 0, a
+     no-op, whenever their overlay is hidden. */
+  padding-top: calc(20px + var(--greeting-clearance, 0px));
   padding-bottom: calc(20px + var(--overlay-clearance, 0px));
   overflow-y: auto;
 }
 
-/* While one tile is playing, fade the rest back so the active one reads as
-   the obvious answer to "which song is on" at a glance, not just via its
-   own glow/bounce competing against every other pastel tile at full
-   strength. */
-.kid-grid.has-active-tile .kid-tile:not(.is-playing) {
+/* While one tile is playing (or paused-but-selected, in simple mode),
+   fade the rest back so the active one reads as the obvious answer to
+   "which song is on" at a glance, not just via its own glow/bounce
+   competing against every other pastel tile at full strength. */
+.kid-grid.has-active-tile .kid-tile:not(.is-playing):not(.is-paused) {
   opacity: 0.5;
 }
 
@@ -331,11 +342,14 @@ h2 {
 
 /* The round part of the card — a solid short "bottom edge" instead of a
    diffuse glow or a colored ring, so it still reads as a chunky flat-color
-   toy puck rather than a glossy photo. Sized off its own width, not
-   height, so it stays a perfect circle no matter how tall its grid row is. */
+   toy puck rather than a glossy photo. Sized off its own width (the grid
+   row is `auto` precisely so it always has room to match); flex-shrink:0
+   is a second line of defense so nothing can squeeze it shorter than that
+   width and turn the circle into an oval. */
 .kid-tile-art {
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
   width: 100%;
   aspect-ratio: 1 / 1;
   max-width: 190px;
@@ -448,6 +462,17 @@ h2 {
 .kid-tile.is-playing .kid-tile-eq {
   display: flex;
 }
+/* Simple mode has no now-playing bar, so a paused-but-still-selected tile
+   needs its own look — a steady version of the ring .is-playing pulses
+   (still reads as "this one's picked"), no bounce, and a pause glyph
+   instead of the dancing eq bars, so a re-tap's effect (resume) is
+   obvious without needing a separate play/pause button anywhere. */
+.kid-tile.is-paused .kid-tile-art {
+  box-shadow: 0 6px 0 rgba(35, 25, 65, 0.14), 0 12px 22px rgba(35, 25, 65, 0.22), 0 0 0 6px rgba(255, 255, 255, 0.95), 0 0 16px 2px rgba(255, 209, 102, 0.5);
+}
+.kid-tile.is-paused .kid-tile-pause {
+  display: flex;
+}
 .kid-tile-eq i {
   width: 5px;
   border-radius: 3px;
@@ -465,6 +490,33 @@ h2 {
 .kid-tile-eq i:nth-child(3) {
   height: 14px;
   animation-delay: 0.4s;
+}
+
+/* Same badge shape/position as .kid-tile-eq, shown instead of it while
+   .is-paused — two static bars read as a pause glyph without needing an
+   emoji font's ⏸ (inconsistent glyph coverage/alignment across devices). */
+.kid-tile-pause {
+  position: absolute;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+.kid-tile-pause::before,
+.kid-tile-pause::after {
+  content: '';
+  width: 4px;
+  height: 14px;
+  border-radius: 2px;
+  background: #6b5b95;
 }
 
 @keyframes tile-bounce {
