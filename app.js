@@ -215,6 +215,7 @@ async function initPlayerAndKidMode() {
       visualizerCanvas: document.getElementById('np-visualizer'),
       vizToggleBtn: document.getElementById('np-viz-toggle'),
       lockToast: document.getElementById('kid-lock-toast'),
+      lockIndicator: document.getElementById('kid-lock-indicator'),
       npTitle: document.getElementById('np-title'),
     },
     player,

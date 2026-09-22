@@ -169,6 +169,52 @@ h2 {
   z-index: 4;
 }
 
+.kid-lock-indicator {
+  /* Persistent counterpart to .kid-lock-toast below: that only flashes for
+     ~2s right when a tap on a *different* tile gets refused, so "we're in
+     the lock window" is otherwise invisible until a kid (or parent)
+     happens to trigger a refusal. This stays up for the whole minute
+     instead — armed by kid-mode.js the moment a song locks in, kept in
+     sync with songLockedUntil rather than with whether a tile is actively
+     "playing" (the lock itself keeps refusing other tiles for the rest of
+     the minute even after the stop button clears the active tile).
+
+     A fixed-size icon badge on purpose, not a labeled pill like the
+     greeting below: .kid-greeting is centered with `left: 50%` and
+     width:auto, and the shrink-to-fit width the browser computes for that
+     (available width = containing-block width *minus* that 50% left
+     offset, since right is auto) lets it claim up to half the viewport
+     before wrapping — so even an ordinary short name's pill can reach well
+     into this same top-left corner, not just an unusually long one
+     (verified by rendering it at a few name lengths/viewport widths).
+     Matching .parent-gate-btn's fixed 36px circle in the opposite corner
+     keeps this one out of the greeting's reach at any name length, the
+     same way that existing button already is. */
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: calc(env(safe-area-inset-left, 0px) + 12px);
+  z-index: 4;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  background: rgba(40, 30, 60, 0.92);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  animation: lock-indicator-pulse 2s ease-in-out infinite;
+}
+@keyframes lock-indicator-pulse {
+  0%,
+  100% {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 0 rgba(255, 209, 102, 0.55);
+  }
+  50% {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 6px rgba(255, 209, 102, 0);
+  }
+}
+
 .kid-lock-toast {
   /* Feedback for "blocked songs mode": shown for a couple seconds when a
      tap on a different tile is refused because the current song hasn't

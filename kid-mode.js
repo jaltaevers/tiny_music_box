@@ -74,6 +74,7 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
   let songLockedUntil = 0;
   let songLockedUri = null;
   let lockToastHideTimer = null;
+  let lockIndicatorHideTimer = null;
   let sleepTimerHandle = null;
   let fadeIntervalHandle = null;
   let progressTickHandle = null;
@@ -130,6 +131,16 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
   function renderGrid() {
     const config = getConfig();
     const tiles = config.tiles;
+    // Settings can only change from parent mode, which hides this whole
+    // view while it's open — so this is the first chance after a parent
+    // turns song-lock off to correct an indicator that was already
+    // showing (its own hide timer would otherwise leave it up — and
+    // technically accurate as of when it was armed, but no longer
+    // meaning anything — well past the point the setting changed).
+    if (!config.settings.songLockEnabled) {
+      clearTimeout(lockIndicatorHideTimer);
+      if (els.lockIndicator) els.lockIndicator.hidden = true;
+    }
     const displayMode = config.settings.tileDisplay === 'simple' ? 'simple' : 'cover';
     const { cols, rows } = computeLayout(tiles.length);
     const portrait = isPortrait();
@@ -272,6 +283,7 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
     if (getConfig().settings.songLockEnabled && activeTrackUri) {
       songLockedUntil = Date.now() + SONG_LOCK_MS;
       songLockedUri = activeTrackUri;
+      armLockIndicator();
     }
     updateActiveTileVisual();
     openNowPlaying();
@@ -282,6 +294,22 @@ export function createKidMode({ els, player, getConfig, onOpenParentGate, onTogg
   // tile is refused (with feedback below) until the minute is up — but the
   // *same* tile, the stop button, and play/pause are never refused, since
   // none of those actually swap in a different song.
+
+  // Persistent sign that the lock is in effect, as opposed to
+  // showLockedFeedback()'s couple-second flash on an actual refused tap —
+  // without this, a kid (or parent) has no way to know a lock is running
+  // until they happen to trigger one. Re-arms on the same schedule as
+  // songLockedUntil itself, including when retapping the same tile in
+  // cover mode restarts the window.
+  function armLockIndicator() {
+    if (!els.lockIndicator) return;
+    els.lockIndicator.hidden = false;
+    clearTimeout(lockIndicatorHideTimer);
+    lockIndicatorHideTimer = setTimeout(() => {
+      els.lockIndicator.hidden = true;
+    }, SONG_LOCK_MS);
+  }
+
   function showLockedFeedback(btn) {
     if (btn) {
       btn.classList.remove('is-locked-shake');
